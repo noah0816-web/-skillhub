@@ -233,7 +233,9 @@ def show_detail(slug: str):
     t1, t2 = st.columns([5, 2])
     with t1:
         st.markdown(f"## {skill['icon']} {skill['name']}")
-        st.markdown(f'<span class="card-cat {cat_class(skill[\"category\"])}">{skill["category"]}</span>', unsafe_allow_html=True)
+        _cc = cat_class(skill["category"])
+        _cn = skill["category"]
+        st.markdown(f'<span class="card-cat {_cc}">{_cn}</span>', unsafe_allow_html=True)
         st.caption(skill["summary"])
     with t2:
         st.metric("调用次数", f"{skill['call_count']:,}")
