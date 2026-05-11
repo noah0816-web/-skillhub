@@ -52,65 +52,136 @@ def _row_to_dict(s: Skill) -> dict:
 # ── Seed data ─────────────────────────────────────────────────────────────────
 
 SEEDS = [
-    dict(name="射频数据异常检测", slug="rf-anomaly-detection", icon="📡",
-         category="射频/天线", owner="李雷", output_type="markdown",
-         call_count=142,
-         summary="自动分析射频测试日志，定位异常频段与根因。",
-         description="## 射频数据异常检测\n\n输入 CSV 格式的射频扫描日志，Agent 将：\n\n1. 自动解析各频段 RSSI / SNR 数据\n2. 使用统计基线 + 规则引擎识别离群点\n3. 生成根因假设报告，包含建议复测方案\n\n> 支持频段：Sub-6G / mmWave / Wi-Fi 6E / BT5.3",
+    dict(name="Anthropic 官方 Claude Skills", slug="anthropics-skills",
+         icon="🤖", category="AI 工具", owner="Anthropic", output_type="markdown",
+         summary="Anthropic 官方发布的 Claude Skills 合集，覆盖代码、写作、分析等场景。",
+         description="## Anthropic 官方 Claude Skills\n\n来源：[anthropics/skills](https://github.com/anthropics/skills)\n\n官方维护的 Claude 技能集合，包含：\n- 代码生成与调试\n- 文档写作与总结\n- 数据分析\n- 多轮对话管理\n\n> 从 GitHub 导入最新版本后可直接调用",
+         source_url="https://github.com/anthropics/skills",
+         input_schema=[{"key": "query", "label": "任务描述", "type": "textarea", "required": True, "placeholder": "描述你要完成的任务..."}]),
+
+    dict(name="OpenAI Skills 合集", slug="openai-skills",
+         icon="🧠", category="AI 工具", owner="OpenAI", output_type="markdown",
+         summary="OpenAI 发布的官方 Skills 集合，适配 GPT 系列模型。",
+         description="## OpenAI Skills 合集\n\n来源：[openai/skills](https://github.com/openai/skills)\n\nOpenAI 官方维护的技能库，包含工具调用、结构化输出、函数调用等最佳实践。",
+         source_url="https://github.com/openai/skills",
+         input_schema=[{"key": "task", "label": "任务", "type": "textarea", "required": True, "placeholder": "输入任务..."}]),
+
+    dict(name="Claude 长期记忆管理", slug="claude-mem",
+         icon="🧩", category="记忆管理", owner="社区", output_type="markdown",
+         summary="为 Claude 提供跨会话长期记忆能力，支持存储与检索用户上下文。",
+         description="## Claude 长期记忆管理\n\n来源：[claude-mem](https://github.com/search?q=claude-mem)\n\n让 Claude 具备持久化记忆能力：\n1. 自动提取对话中的关键信息\n2. 向量化存储，语义检索\n3. 注入历史上下文到新会话\n\n> 适合需要跨会话保持上下文的场景",
+         source_url="https://github.com/search?q=claude-mem",
          input_schema=[
-             {"key": "csv_data",   "label": "CSV 日志内容",  "type": "textarea", "required": True,  "placeholder": "粘贴射频扫描 CSV 数据..."},
-             {"key": "freq_range", "label": "目标频段",      "type": "select",   "required": False, "options": ["全部","Sub-6G","mmWave","Wi-Fi 6E","BT5.3"], "default": "全部"},
-             {"key": "threshold",  "label": "异常阈值 (dBm)","type": "number",   "required": False, "placeholder": "-85"},
+             {"key": "action",  "label": "操作", "type": "select", "required": True, "options": ["存储记忆","检索记忆","清空记忆"]},
+             {"key": "content", "label": "内容", "type": "textarea", "required": False, "placeholder": "要存储或检索的内容..."},
          ]),
-    dict(name="竞品参数推演", slug="competitor-spec-inference", icon="🔍",
-         category="竞品情报", owner="韩梅梅", output_type="json",
-         call_count=87,
-         summary="基于拆机 BOM 与公开基准推演竞品核心硬件参数。",
-         description="## 竞品参数推演\n\n输入竞品型号，Agent 将推理补全未知参数并输出置信度评分。\n\n> 数据源：极客湾 / 微机分 / AnandTech / TechInsights",
+
+    dict(name="通用 AI Agents 工具集", slug="agents",
+         icon="🕵️", category="AI 工具", owner="社区", output_type="markdown",
+         summary="多种通用 AI Agent 实现，涵盖规划、执行、反思等核心能力。",
+         description="## 通用 AI Agents 工具集\n\n来源：[agents](https://github.com/search?q=ai+agents+skills)\n\n包含 ReAct、CoT、Plan-and-Execute 等多种 Agent 模式的参考实现。",
+         source_url="https://github.com/search?q=ai+agents+skills",
          input_schema=[
-             {"key": "model_name",  "label": "竞品型号",     "type": "text",     "required": True,  "placeholder": "例：Samsung Galaxy S25 Ultra"},
-             {"key": "known_specs", "label": "已知规格片段", "type": "textarea", "required": False, "placeholder": "可选：粘贴已知参数..."},
-             {"key": "focus_area",  "label": "重点推演维度", "type": "select",   "required": False, "options": ["全维度","SoC/内存","相机系统","电池/充电","射频天线"], "default": "全维度"},
+             {"key": "goal",    "label": "Agent 目标", "type": "textarea", "required": True, "placeholder": "描述 Agent 需要完成的目标..."},
+             {"key": "mode",    "label": "执行模式",   "type": "select",   "required": False, "options": ["ReAct","CoT","Plan-and-Execute"], "default": "ReAct"},
          ]),
-    dict(name="电池客诉总结", slug="battery-complaint-summary", icon="🔋",
-         category="质量/可靠性", owner="张三", output_type="markdown",
-         call_count=203,
-         summary="批量处理电池相关客诉工单，提炼高频问题与根因分布。",
-         description="## 电池客诉总结\n\n将多条客诉工单文本输入 Agent，输出分类统计 + 根因假设排序 + 品质委员会摘要报告。\n\n> 支持中英混合输入，换行分隔工单",
+
+    dict(name="Awesome Agent Skills", slug="awesome-agent-skills",
+         icon="⭐", category="AI 工具", owner="社区", output_type="markdown",
+         summary="精选 Agent Skills 大全，社区协作维护的高质量技能合集。",
+         description="## Awesome Agent Skills\n\n来源：[awesome-agent-skills](https://github.com/search?q=awesome-agent-skills)\n\n社区精选的 Agent 技能索引，覆盖：代码、写作、研究、数据、自动化等场景。",
+         source_url="https://github.com/search?q=awesome-agent-skills",
+         input_schema=[{"key": "keyword", "label": "搜索关键词", "type": "text", "required": True, "placeholder": "例：代码审查"}]),
+
+    dict(name="Planning with Files", slug="planning-with-files",
+         icon="📁", category="规划", owner="社区", output_type="markdown",
+         summary="基于文件系统的 AI 规划 Agent，支持读写本地文件完成复杂任务。",
+         description="## Planning with Files\n\n来源：[planning-with-files](https://github.com/search?q=planning-with-files)\n\n将文件系统作为 Agent 的外部记忆，实现：\n- 任务拆解与计划持久化\n- 进度跟踪\n- 多步骤执行",
+         source_url="https://github.com/search?q=planning-with-files",
          input_schema=[
-             {"key": "complaints",   "label": "客诉工单内容", "type": "textarea", "required": True,  "placeholder": "每条工单占一行..."},
-             {"key": "product_line", "label": "产品线",       "type": "select",   "required": False, "options": ["全部","旗舰系列","中端系列","折叠屏","平板"], "default": "全部"},
-             {"key": "date_range",   "label": "时间范围",     "type": "text",     "required": False, "placeholder": "例：2025-01 ~ 2025-06"},
+             {"key": "task",      "label": "任务描述", "type": "textarea", "required": True},
+             {"key": "work_dir",  "label": "工作目录", "type": "text",     "required": False, "placeholder": "/tmp/workspace"},
          ]),
-    dict(name="天线仿真报告解析", slug="antenna-sim-parser", icon="🧲",
-         category="射频/天线", owner="李雷", output_type="markdown",
-         call_count=56,
-         summary="解析 HFSS/CST 仿真输出，自动标注关键指标并生成优化建议。",
-         description="## 天线仿真报告解析\n\n粘贴仿真软件导出的 S 参数 / 方向图数据，Agent 识别谐振频率、带宽、增益，对比目标 spec，给出结构调整建议。\n\n> 支持 Touchstone (.s1p/.s2p) 与 CSV",
+
+    dict(name="Scientific Agent Skills", slug="scientific-agent-skills",
+         icon="🔬", category="研究助手", owner="社区", output_type="markdown",
+         summary="面向科研场景的 Agent 技能集，支持文献检索、数据分析、假设生成。",
+         description="## Scientific Agent Skills\n\n来源：[scientific-agent-skills](https://github.com/search?q=scientific-agent-skills)\n\n科研 AI 助手工具箱：\n1. 论文检索与摘要\n2. 实验数据分析\n3. 假设验证辅助\n4. 引用格式化",
+         source_url="https://github.com/search?q=scientific-agent-skills",
          input_schema=[
-             {"key": "sim_data",    "label": "仿真数据",       "type": "textarea", "required": True, "placeholder": "粘贴 S 参数或方向图 CSV..."},
-             {"key": "target_freq", "label": "目标频率 (MHz)", "type": "text",     "required": True, "placeholder": "例：2400,5800"},
-             {"key": "target_gain", "label": "目标增益 (dBi)", "type": "number",   "required": False,"placeholder": "3"},
+             {"key": "research_q", "label": "研究问题", "type": "textarea", "required": True},
+             {"key": "domain",     "label": "研究领域", "type": "select",   "required": False, "options": ["材料科学","生物医学","物理","工程","通用"], "default": "通用"},
          ]),
-    dict(name="可靠性测试 Fail 分析", slug="reliability-fail-analysis", icon="🧪",
-         category="质量/可靠性", owner="王芳", output_type="markdown",
-         call_count=31,
-         summary="输入可靠性测试失效数据，自动输出 Fault Tree 与 8D 报告草稿。",
-         description="## 可靠性测试 Fail 分析\n\n输入测试类型与失效现象，Agent 构建初步 FTA，匹配历史 DFMEA 案例，生成 8D 报告模板（D1-D4 自动填充）。",
+
+    dict(name="Claude Skills 社区库", slug="claude-skills",
+         icon="💡", category="AI 工具", owner="社区", output_type="markdown",
+         summary="社区共建的 Claude Skills 合集，涵盖日常办公、开发、创意等高频场景。",
+         description="## Claude Skills 社区库\n\n来源：[claude-skills](https://github.com/search?q=claude-skills)\n\n由社区用户贡献和维护，包含各类实用技能模板，开箱即用。",
+         source_url="https://github.com/search?q=claude-skills+yaml",
+         input_schema=[{"key": "input", "label": "输入内容", "type": "textarea", "required": True}]),
+
+    dict(name="Skill Seekers", slug="skill-seekers",
+         icon="🔎", category="AI 工具", owner="社区", output_type="json",
+         summary="AI 技能发现与推荐引擎，根据任务描述自动匹配最适合的 Skill。",
+         description="## Skill Seekers\n\n来源：[Skill_Seekers](https://github.com/search?q=Skill_Seekers)\n\n输入你的任务，自动在技能库中匹配最合适的 Skill 并返回使用建议。",
+         source_url="https://github.com/search?q=Skill_Seekers",
+         input_schema=[{"key": "task_desc", "label": "任务描述", "type": "textarea", "required": True, "placeholder": "我想要..."}]),
+
+    dict(name="Understand Anything", slug="understand-anything",
+         icon="🌐", category="研究助手", owner="社区", output_type="markdown",
+         summary="万物理解 Agent，输入任何文本、URL 或概念，输出深度解读与结构化分析。",
+         description="## Understand Anything\n\n来源：[Understand-Anything](https://github.com/search?q=Understand-Anything)\n\n通用内容理解工具，支持：\n- 网页/文章深度解读\n- 技术概念解析\n- 多语言理解\n- 结构化知识提取",
+         source_url="https://github.com/search?q=Understand-Anything",
          input_schema=[
-             {"key": "test_type",    "label": "测试类型",    "type": "select",   "required": True,  "options": ["跌落测试","振动测试","温湿度循环","ESD","盐雾","其他"]},
-             {"key": "failure_desc", "label": "失效现象描述","type": "textarea", "required": True,  "placeholder": "详细描述失效现象、批次、复现率..."},
-             {"key": "sample_count", "label": "样品总数",    "type": "number",   "required": False, "placeholder": "50"},
-             {"key": "fail_count",   "label": "失效数量",    "type": "number",   "required": False, "placeholder": "3"},
+             {"key": "content", "label": "内容（文本或 URL）", "type": "textarea", "required": True},
+             {"key": "depth",   "label": "解读深度", "type": "select", "required": False, "options": ["概要","标准","深度"], "default": "标准"},
          ]),
-    dict(name="供应链风险扫描", slug="supply-chain-risk-scan", icon="🌐",
-         category="供应链", owner="韩梅梅", output_type="json",
-         call_count=19,
-         summary="输入 BOM 关键器件清单，扫描断供风险与备选方案。",
-         description="## 供应链风险扫描\n\n输入关键器件，Agent 查询供需动态，评估单一来源风险，推荐 Pin-to-Pin 兼容备选料。\n\n> 每次最多 50 颗关键器件",
+
+    dict(name="NotebookLM Python 接口", slug="notebooklm-py",
+         icon="📓", category="研究助手", owner="社区", output_type="markdown",
+         summary="Google NotebookLM 的 Python 封装，支持上传文档、生成摘要与问答。",
+         description="## NotebookLM Python 接口\n\n来源：[notebooklm-py](https://github.com/search?q=notebooklm-py)\n\n用 Python 调用 NotebookLM 的能力：\n1. 上传 PDF / 文档\n2. 自动生成播客式摘要\n3. 基于文档的问答",
+         source_url="https://github.com/search?q=notebooklm-py",
          input_schema=[
-             {"key": "bom_items",  "label": "器件清单", "type": "textarea","required": True,  "placeholder": "每行一条：料号, 描述, 供应商"},
-             {"key": "risk_level", "label": "扫描深度", "type": "select",  "required": False, "options": ["快速扫描","标准分析","深度审查"], "default": "标准分析"},
+             {"key": "doc_url",   "label": "文档 URL",  "type": "text",     "required": True},
+             {"key": "question",  "label": "提问",      "type": "textarea", "required": False},
+         ]),
+
+    dict(name="Jeffallan Claude Skills", slug="jeffallan-claude-skills",
+         icon="🛠️", category="AI 工具", owner="Jeffallan", output_type="markdown",
+         summary="Jeffallan 整理的 Claude 实用技能包，覆盖开发、写作、数据处理。",
+         description="## Jeffallan Claude Skills\n\n来源：[Jeffallan/claude-skills](https://github.com/Jeffallan/claude-skills)\n\n社区贡献者 Jeffallan 整理的实用 Claude 技能集，经过实际项目验证。",
+         source_url="https://github.com/Jeffallan/claude-skills",
+         input_schema=[{"key": "input", "label": "输入", "type": "textarea", "required": True}]),
+
+    dict(name="AI Research Skills", slug="ai-research-skills",
+         icon="📚", category="研究助手", owner="社区", output_type="markdown",
+         summary="面向 AI 研究者的技能合集，包含论文阅读、实验设计、结果分析等工具。",
+         description="## AI Research Skills\n\n来源：[AI-Research-SKILLs](https://github.com/search?q=AI-Research-SKILLs)\n\n专为 AI 研究人员设计：\n- arXiv 论文快速解读\n- 实验结果对比分析\n- 相关工作梳理\n- Baseline 复现指引",
+         source_url="https://github.com/search?q=AI-Research-SKILLs",
+         input_schema=[
+             {"key": "paper_url", "label": "论文链接或摘要", "type": "textarea", "required": True},
+             {"key": "focus",     "label": "关注点",        "type": "select",   "required": False, "options": ["方法","实验","贡献点","全文"], "default": "贡献点"},
+         ]),
+
+    dict(name="Prompt Master", slug="prompt-master",
+         icon="✍️", category="AI 工具", owner="社区", output_type="markdown",
+         summary="提示词工程专家，帮助优化和生成高质量 Prompt，提升 AI 输出效果。",
+         description="## Prompt Master\n\n来源：[prompt-master](https://github.com/search?q=prompt-master+skill)\n\n提示词全流程工具：\n1. 分析现有 Prompt 的问题\n2. 自动优化重写\n3. A/B 测试版本生成\n4. 特定场景 Prompt 模板",
+         source_url="https://github.com/search?q=prompt-master+skill",
+         input_schema=[
+             {"key": "prompt",  "label": "原始 Prompt",  "type": "textarea", "required": True},
+             {"key": "goal",    "label": "优化目标",     "type": "select",   "required": False, "options": ["更精确","更简洁","更有创意","更专业"], "default": "更精确"},
+         ]),
+
+    dict(name="Product Manager Skills", slug="product-manager-skills",
+         icon="📊", category="产品/规划", owner="社区", output_type="markdown",
+         summary="产品经理 AI 技能集，覆盖需求分析、PRD 撰写、用户故事拆解等核心工作。",
+         description="## Product Manager Skills\n\n来源：[Product-Manager-Skills](https://github.com/search?q=Product-Manager-Skills)\n\n为产品经理量身打造：\n1. 需求文档自动化生成\n2. 用户故事拆解\n3. 竞品分析框架\n4. OKR / KPI 制定辅助",
+         source_url="https://github.com/search?q=Product-Manager-Skills",
+         input_schema=[
+             {"key": "requirement", "label": "需求描述", "type": "textarea", "required": True, "placeholder": "描述产品需求或功能点..."},
+             {"key": "doc_type",    "label": "输出类型", "type": "select",   "required": False, "options": ["PRD","用户故事","竞品分析","OKR"], "default": "PRD"},
          ]),
 ]
 
@@ -120,6 +191,12 @@ SEEDS = [
 def init_db():
     Base.metadata.create_all(engine)
     _run_migrations()
+    db = Session()
+    if db.query(Skill).count() == 0:
+        for d in SEEDS:
+            db.add(Skill(**d))
+        db.commit()
+    db.close()
 
 
 def _run_migrations():
@@ -214,6 +291,36 @@ def _parse(text: str) -> dict:
 
 def preview_url(url: str) -> dict:
     return _parse(_fetch(url))
+
+
+def scan_github_repo(repo_url: str) -> list[dict]:
+    """Given a GitHub repo URL, return a list of yaml files with their raw URLs."""
+    m = re.match(r"https?://github\.com/([^/]+)/([^/]+?)(?:\.git)?/?$", repo_url)
+    if not m:
+        return []
+    owner, repo = m.groups()
+    # Get default branch
+    meta = httpx.get(f"https://api.github.com/repos/{owner}/{repo}", timeout=10)
+    meta.raise_for_status()
+    branch = meta.json().get("default_branch", "main")
+    # List all files recursively
+    tree = httpx.get(
+        f"https://api.github.com/repos/{owner}/{repo}/git/trees/{branch}?recursive=1",
+        timeout=15,
+    )
+    tree.raise_for_status()
+    files = tree.json().get("tree", [])
+    yaml_files = [
+        f for f in files
+        if f["type"] == "blob" and (f["path"].endswith(".yaml") or f["path"].endswith(".yml"))
+    ]
+    return [
+        {
+            "path": f["path"],
+            "raw_url": f"https://raw.githubusercontent.com/{owner}/{repo}/{branch}/{f['path']}",
+        }
+        for f in yaml_files
+    ]
 
 
 def import_url(url: str) -> dict:

@@ -3,6 +3,7 @@ import streamlit as st
 from db import (
     init_db, get_all_skills, get_categories,
     get_skill, execute_skill, preview_url, import_url, sync_skill,
+    scan_github_repo,
 )
 
 # ── Page config ───────────────────────────────────────────────────────────────
@@ -97,7 +98,8 @@ def cat_class(c): return CAT_CLASS.get(c, "cat-default")
 
 @st.dialog("从 URL 导入 Skill", width="large")
 def import_dialog():
-    st.caption("支持 GitHub 文件链接、Gist、或任意公网 `skill.yaml` 文件")
+    import re
+    st.caption("支持 GitHub 仓库链接、单个文件链接、Gist 或任意公网 `skill.yaml`")
 
     with st.expander("查看 skill.yaml 格式规范"):
         st.code("""name: "我的 Skill"
@@ -124,43 +126,85 @@ input_schema:
     default: "快速"
 """, language="yaml")
 
-    url = st.text_input("Skill YAML 文件 URL", placeholder="https://github.com/your-org/skills/blob/main/my-skill.yaml")
+    url = st.text_input(
+        "GitHub 仓库或文件 URL",
+        placeholder="https://github.com/owner/repo  或  https://github.com/owner/repo/blob/main/skill.yaml",
+    )
 
-    col1, col2 = st.columns([1, 1])
+    is_repo = bool(url and re.match(r"https?://github\.com/[^/]+/[^/]+/?$", url.strip()))
 
-    with col1:
-        if st.button("预览", use_container_width=True) and url:
-            with st.spinner("获取中…"):
+    # ── Repo URL: scan & pick ──────────────────────────────────────────────────
+    if is_repo:
+        if st.button("🔍 扫描仓库 yaml 文件", use_container_width=True):
+            with st.spinner("正在扫描 GitHub 仓库…"):
                 try:
-                    st.session_state["_preview"] = preview_url(url.strip())
-                    st.session_state["_preview_url"] = url.strip()
+                    files = scan_github_repo(url.strip())
+                    st.session_state["_repo_files"] = files
+                    st.session_state["_repo_url"]   = url.strip()
                 except Exception as e:
-                    st.error(f"获取失败：{e}")
+                    st.error(f"扫描失败：{e}")
 
-    # Show preview
-    if "_preview" in st.session_state:
-        p = st.session_state["_preview"]
-        st.divider()
-        c1, c2, c3 = st.columns(3)
-        c1.metric("名称", f"{p.get('icon','⚡')} {p.get('name','')}")
-        c2.metric("分类", p.get("category", "通用"))
-        c3.metric("输入字段", len(p.get("input_schema", [])))
-        if p.get("execute_url"):
-            st.success("✓ 包含真实执行端点，Skill 将实际运行 Agent")
-        else:
-            st.warning("ℹ 无 execute_url，将使用 Mock 模式执行")
+        if "_repo_files" in st.session_state and st.session_state.get("_repo_url") == url.strip():
+            files = st.session_state["_repo_files"]
+            if not files:
+                st.warning("该仓库中未找到 .yaml / .yml 文件")
+            else:
+                st.success(f"找到 {len(files)} 个 yaml 文件，选择要导入的：")
+                options = {f["path"]: f["raw_url"] for f in files}
+                selected = st.multiselect("选择文件", list(options.keys()))
 
-        with col2:
-            if st.button("✓ 确认导入", type="primary", use_container_width=True):
-                with st.spinner("导入中…"):
-                    try:
-                        import_url(st.session_state["_preview_url"])
-                        del st.session_state["_preview"]
-                        del st.session_state["_preview_url"]
-                        st.success("导入成功！")
+                if selected and st.button(f"✓ 导入选中的 {len(selected)} 个文件", type="primary", use_container_width=True):
+                    ok, fail = 0, []
+                    for path in selected:
+                        try:
+                            import_url(options[path])
+                            ok += 1
+                        except Exception as e:
+                            fail.append(f"{path}: {e}")
+                    if ok:
+                        st.success(f"✓ 成功导入 {ok} 个 Skill")
+                    if fail:
+                        st.warning("以下文件格式不兼容（缺少必填字段）：\n" + "\n".join(fail))
+                    if ok:
+                        for k in ("_repo_files", "_repo_url", "_preview", "_preview_url"):
+                            st.session_state.pop(k, None)
                         st.rerun()
+
+    # ── File URL: preview & import ─────────────────────────────────────────────
+    else:
+        col1, col2 = st.columns([1, 1])
+        with col1:
+            if st.button("预览", use_container_width=True) and url:
+                with st.spinner("获取中…"):
+                    try:
+                        st.session_state["_preview"]     = preview_url(url.strip())
+                        st.session_state["_preview_url"] = url.strip()
                     except Exception as e:
-                        st.error(f"导入失败：{e}")
+                        st.error(f"获取失败：{e}")
+
+        if "_preview" in st.session_state:
+            p = st.session_state["_preview"]
+            st.divider()
+            c1, c2, c3 = st.columns(3)
+            c1.metric("名称", f"{p.get('icon','⚡')} {p.get('name','')}")
+            c2.metric("分类", p.get("category", "通用"))
+            c3.metric("输入字段", len(p.get("input_schema", [])))
+            if p.get("execute_url"):
+                st.success("✓ 包含真实执行端点，Skill 将实际运行 Agent")
+            else:
+                st.warning("ℹ 无 execute_url，将使用 Mock 模式执行")
+
+            with col2:
+                if st.button("✓ 确认导入", type="primary", use_container_width=True):
+                    with st.spinner("导入中…"):
+                        try:
+                            import_url(st.session_state["_preview_url"])
+                            st.session_state.pop("_preview", None)
+                            st.session_state.pop("_preview_url", None)
+                            st.success("导入成功！")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"导入失败：{e}")
 
 
 # ── Grid view ─────────────────────────────────────────────────────────────────
