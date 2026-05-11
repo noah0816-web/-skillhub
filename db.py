@@ -120,12 +120,6 @@ SEEDS = [
 def init_db():
     Base.metadata.create_all(engine)
     _run_migrations()
-    db = Session()
-    if db.query(Skill).count() == 0:
-        for d in SEEDS:
-            db.add(Skill(**d))
-        db.commit()
-    db.close()
 
 
 def _run_migrations():

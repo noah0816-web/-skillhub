@@ -191,7 +191,30 @@ def show_grid():
     skills = get_all_skills(category=active_cat, search=search or None)
 
     if not skills:
-        st.info("没有找到匹配的技能")
+        st.markdown("""
+<div style="text-align:center;padding:3rem 1rem">
+  <div style="font-size:3rem;margin-bottom:1rem">📭</div>
+  <h3 style="color:#e2e8f0;margin-bottom:.5rem">还没有任何 Skill</h3>
+  <p style="color:#64748b;margin-bottom:2rem">点击右上角「＋ 导入 Skill」，粘贴 GitHub 上任意 skill.yaml 文件的链接即可引入。</p>
+</div>
+""", unsafe_allow_html=True)
+
+        st.markdown("**可以去这些 GitHub 仓库搜索 Skill 文件：**")
+        repos = [
+            ("anthropics/skills",         "https://github.com/anthropics/skills"),
+            ("openai/skills",             "https://github.com/openai/skills"),
+            ("Jeffallan/claude-skills",   "https://github.com/Jeffallan/claude-skills"),
+            ("awesome-agent-skills",      "https://github.com/search?q=awesome-agent-skills"),
+            ("AI-Research-SKILLs",        "https://github.com/search?q=AI-Research-SKILLs"),
+            ("claude-skills",             "https://github.com/search?q=claude-skills+skill.yaml"),
+            ("claude-mem",                "https://github.com/search?q=claude-mem"),
+            ("prompt-master",             "https://github.com/search?q=prompt-master+skill"),
+        ]
+        cols = st.columns(4)
+        for i, (name, url) in enumerate(repos):
+            cols[i % 4].markdown(f"[🔗 {name}]({url})")
+
+        st.info("💡 找到 skill.yaml 文件后，复制它在 GitHub 上的链接，粘贴到「导入 Skill」对话框即可。", icon=None)
         return
 
     st.caption(f"{len(skills)} 个技能")
