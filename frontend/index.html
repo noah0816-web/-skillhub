@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SkillHub · 硬工技能中心</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            surface: '#0f1117', card: '#161b27', border: '#1e2535',
+            accent: '#3b82f6', accent2: '#6366f1',
+          },
+          fontFamily: { mono: ['JetBrains Mono','Fira Code','monospace'] },
+        }
+      }
+    }
+  </script>
+  <style>
+    body { background: #0f1117; }
+    .card-hover { transition: transform .18s ease, box-shadow .18s ease; }
+    .card-hover:hover { transform: translateY(-3px); box-shadow: 0 8px 32px rgba(59,130,246,.18); }
+    .gradient-text { background: linear-gradient(135deg,#3b82f6,#8b5cf6); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+    .badge { font-size:.7rem; letter-spacing:.05em; }
+    .search-glow:focus { box-shadow: 0 0 0 2px rgba(59,130,246,.4); }
+    ::-webkit-scrollbar{width:6px} ::-webkit-scrollbar-track{background:#0f1117} ::-webkit-scrollbar-thumb{background:#1e2535;border-radius:3px}
+    /* Modal backdrop */
+    #import-modal { display:none }
+    #import-modal.open { display:flex }
+    /* Spinner */
+    @keyframes spin{to{transform:rotate(360deg)}} .spin{animation:spin .7s linear infinite}
+    /* Source badge on card */
+    .src-badge { font-size:.65rem; }
+  </style>
+</head>
+<body class="text-slate-200 min-h-screen font-sans antialiased">
+
+<!-- ── Header ── -->
+<header class="border-b border-border sticky top-0 z-40 backdrop-blur bg-surface/90">
+  <div class="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-sm font-bold">S</div>
+      <span class="font-semibold text-lg tracking-tight">SkillHub</span>
+      <span class="text-slate-500 text-sm hidden sm:inline">· 硬工 AI 技能中心</span>
+    </div>
+    <div class="flex items-center gap-3">
+      <span id="skill-count" class="text-xs text-slate-500 font-mono"></span>
+      <button onclick="openImportModal()"
+        class="flex items-center gap-1.5 text-sm bg-accent hover:bg-blue-500 text-white font-semibold px-4 py-2 rounded-lg transition">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+        </svg>
+        导入 Skill
+      </button>
+    </div>
+  </div>
+</header>
+
+<!-- ── Hero ── -->
+<section class="max-w-7xl mx-auto px-6 pt-12 pb-8">
+  <h1 class="text-3xl sm:text-4xl font-bold mb-2">
+    <span class="gradient-text">AI Skill</span> 广场
+  </h1>
+  <p class="text-slate-400 text-sm mb-8 max-w-xl">集中展示与调用团队内部所有 AI Agent 技能。支持从 GitHub / 任意公网 URL 一键引入外部 Skill。</p>
+  <div class="flex flex-col sm:flex-row gap-3">
+    <div class="relative flex-1 max-w-md">
+      <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+      </svg>
+      <input id="search" type="text" placeholder="搜索技能..."
+        class="search-glow w-full bg-card border border-border rounded-lg pl-9 pr-4 py-2.5 text-sm text-slate-200 placeholder-slate-500 outline-none focus:border-accent transition" />
+    </div>
+    <div id="category-filters" class="flex gap-2 flex-wrap"></div>
+  </div>
+</section>
+
+<!-- ── Grid ── -->
+<main class="max-w-7xl mx-auto px-6 pb-16">
+  <div id="skill-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"></div>
+  <div id="empty" class="hidden text-center py-20 text-slate-500">没有找到匹配的技能</div>
+</main>
+
+<!-- ── Card template ── -->
+<template id="card-tpl">
+  <a href="#" class="card-hover block bg-card border border-border rounded-xl p-5 cursor-pointer group relative">
+    <div class="flex items-start justify-between mb-3">
+      <span class="text-2xl skill-icon"></span>
+      <span class="badge skill-category border rounded-full px-2 py-0.5 uppercase tracking-wide"></span>
+    </div>
+    <h3 class="font-semibold text-slate-100 text-sm mb-1 skill-name group-hover:text-blue-400 transition"></h3>
+    <p class="text-xs text-slate-400 leading-relaxed mb-4 skill-summary line-clamp-2"></p>
+    <div class="flex items-center justify-between">
+      <span class="text-xs text-slate-500 skill-owner">👤 <span></span></span>
+      <span class="text-xs text-slate-600 font-mono skill-count"></span>
+    </div>
+    <!-- External badge (shown only when source_url exists) -->
+    <span class="src-badge skill-src hidden absolute top-3 right-14 bg-indigo-500/15 text-indigo-400 border border-indigo-500/25 rounded px-1.5 py-0.5 font-mono">外部引入</span>
+  </a>
+</template>
+
+<!-- ─────────────────────────────────────────────────────────── -->
+<!-- Import Modal                                                -->
+<!-- ─────────────────────────────────────────────────────────── -->
+<div id="import-modal" class="fixed inset-0 z-50 items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+  <div class="bg-card border border-border rounded-2xl w-full max-w-xl shadow-2xl flex flex-col max-h-[90vh]">
+
+    <!-- Modal header -->
+    <div class="flex items-center justify-between px-6 pt-6 pb-4 border-b border-border shrink-0">
+      <div>
+        <h2 class="font-bold text-lg">从 URL 导入 Skill</h2>
+        <p class="text-xs text-slate-500 mt-0.5">支持 GitHub 文件链接、Gist、或任意公网 <code class="bg-surface px-1 rounded">skill.yaml</code> 文件</p>
+      </div>
+      <button onclick="closeImportModal()" class="text-slate-500 hover:text-slate-300 p-1 rounded transition">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+        </svg>
+      </button>
+    </div>
+
+    <!-- Modal body -->
+    <div class="px-6 py-5 flex flex-col gap-4 overflow-y-auto flex-1">
+
+      <!-- URL input row -->
+      <div class="flex gap-2">
+        <input id="import-url" type="url" placeholder="https://github.com/your-org/skills/blob/main/my-skill.yaml"
+          class="flex-1 bg-surface border border-border rounded-lg px-3 py-2.5 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition" />
+        <button id="preview-btn" onclick="previewSkill()"
+          class="shrink-0 bg-surface border border-border hover:border-accent text-slate-300 hover:text-white text-sm font-medium px-4 rounded-lg transition flex items-center gap-1.5">
+          <span id="preview-btn-icon">预览</span>
+        </button>
+      </div>
+
+      <!-- Format hint -->
+      <details class="text-xs text-slate-500 group">
+        <summary class="cursor-pointer hover:text-slate-300 transition select-none">查看 skill.yaml 格式规范 ▸</summary>
+        <pre class="mt-2 bg-surface border border-border rounded-lg p-3 text-slate-400 overflow-x-auto leading-relaxed">name: "我的 Skill"
+slug: "my-skill"           # 可选，自动生成
+icon: "🚀"
+category: "通用"
+summary: "一句话描述"
+owner: "张三"
+output_type: "markdown"    # markdown | json
+execute_url: "https://..."  # 可选：真实执行端点
+description: |
+  ## Markdown 格式详细说明
+
+input_schema:
+  - key: query
+    label: 查询内容
+    type: textarea          # text|textarea|number|select
+    required: true
+    placeholder: "输入..."
+  - key: mode
+    label: 模式
+    type: select
+    options: ["快速","精准"]
+    default: "快速"</pre>
+      </details>
+
+      <!-- Preview area -->
+      <div id="preview-area" class="hidden">
+        <div class="flex items-center gap-2 mb-3">
+          <div class="h-px flex-1 bg-border"></div>
+          <span class="text-xs text-slate-500 uppercase tracking-widest">预览</span>
+          <div class="h-px flex-1 bg-border"></div>
+        </div>
+        <div id="preview-content" class="bg-surface border border-border rounded-xl p-4 flex flex-col gap-3"></div>
+      </div>
+
+      <!-- Error -->
+      <div id="import-error" class="hidden text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg p-3"></div>
+    </div>
+
+    <!-- Modal footer -->
+    <div class="px-6 pb-6 pt-3 border-t border-border flex justify-end gap-3 shrink-0">
+      <button onclick="closeImportModal()" class="text-sm text-slate-400 hover:text-slate-200 px-4 py-2 rounded-lg transition">取消</button>
+      <button id="confirm-btn" onclick="confirmImport()" disabled
+        class="text-sm font-semibold px-5 py-2 rounded-lg bg-accent hover:bg-blue-500 text-white transition disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2">
+        <span id="confirm-icon"></span>
+        <span id="confirm-text">确认导入</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = '';
+let allSkills = [];
+let activeCategory = null;
+let previewData = null;
+
+const CATEGORY_COLORS = {
+  '射频/天线':'bg-cyan-500/10 text-cyan-400 border-cyan-500/20',
+  '竞品情报': 'bg-purple-500/10 text-purple-400 border-purple-500/20',
+  '质量/可靠性':'bg-amber-500/10 text-amber-400 border-amber-500/20',
+  '供应链':   'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+  '通用':     'bg-blue-500/10 text-blue-400 border-blue-500/20',
+};
+
+function colorFor(cat) { return CATEGORY_COLORS[cat] || CATEGORY_COLORS['通用']; }
+
+// ── Load ──
+async function load() {
+  const [skills, cats] = await Promise.all([
+    fetch(`${API}/api/skills`).then(r => r.json()),
+    fetch(`${API}/api/categories`).then(r => r.json()),
+  ]);
+  allSkills = skills;
+  document.getElementById('skill-count').textContent = `${skills.length} skills`;
+  renderCategories(cats);
+  renderGrid(skills);
+}
+
+// ── Categories ──
+function renderCategories(cats) {
+  const wrap = document.getElementById('category-filters');
+  wrap.innerHTML = '';
+  const mkBtn = (label, cat, active) => {
+    const b = document.createElement('button');
+    b.textContent = label;
+    b.dataset.cat = cat;
+    b.className = active
+      ? 'cat-btn text-xs px-3 py-1.5 rounded-full border transition font-medium bg-accent border-accent text-white'
+      : 'cat-btn text-xs px-3 py-1.5 rounded-full border transition font-medium bg-card border-border text-slate-400 hover:border-accent hover:text-slate-200';
+    b.addEventListener('click', () => setCategory(cat === '' ? null : cat));
+    return b;
+  };
+  wrap.appendChild(mkBtn('全部', '', !activeCategory));
+  cats.forEach(c => wrap.appendChild(mkBtn(c, c, activeCategory === c)));
+}
+
+function setCategory(cat) {
+  activeCategory = cat;
+  document.querySelectorAll('.cat-btn').forEach(b => {
+    const on = b.dataset.cat === (cat ?? '');
+    b.className = on
+      ? 'cat-btn text-xs px-3 py-1.5 rounded-full border transition font-medium bg-accent border-accent text-white'
+      : 'cat-btn text-xs px-3 py-1.5 rounded-full border transition font-medium bg-card border-border text-slate-400 hover:border-accent hover:text-slate-200';
+  });
+  applyFilter();
+}
+
+// ── Grid ──
+function applyFilter() {
+  const q = document.getElementById('search').value.toLowerCase().trim();
+  let list = allSkills;
+  if (activeCategory) list = list.filter(s => s.category === activeCategory);
+  if (q) list = list.filter(s => s.name.includes(q)||s.summary.includes(q)||s.owner.includes(q));
+  renderGrid(list);
+}
+
+function renderGrid(skills) {
+  const grid = document.getElementById('skill-grid');
+  const empty = document.getElementById('empty');
+  grid.innerHTML = '';
+  if (!skills.length) { empty.classList.remove('hidden'); return; }
+  empty.classList.add('hidden');
+  const tpl = document.getElementById('card-tpl');
+  skills.forEach(s => {
+    const node = tpl.content.cloneNode(true);
+    const card = node.querySelector('a');
+    card.href = `/skill/${s.slug}`;
+    node.querySelector('.skill-icon').textContent = s.icon;
+    const catEl = node.querySelector('.skill-category');
+    catEl.textContent = s.category;
+    catEl.className = `badge skill-category border rounded-full px-2 py-0.5 uppercase tracking-wide ${colorFor(s.category)}`;
+    node.querySelector('.skill-name').textContent = s.name;
+    node.querySelector('.skill-summary').textContent = s.summary;
+    node.querySelector('.skill-owner span').textContent = s.owner;
+    node.querySelector('.skill-count').textContent = `${s.call_count.toLocaleString()} calls`;
+    if (s.source_url) node.querySelector('.skill-src').classList.remove('hidden');
+    grid.appendChild(node);
+  });
+}
+
+document.getElementById('search').addEventListener('input', applyFilter);
+
+// ── Import Modal ──
+function openImportModal() {
+  document.getElementById('import-modal').classList.add('open');
+  document.getElementById('import-url').focus();
+}
+function closeImportModal() {
+  document.getElementById('import-modal').classList.remove('open');
+  resetModal();
+}
+function resetModal() {
+  document.getElementById('import-url').value = '';
+  document.getElementById('preview-area').classList.add('hidden');
+  document.getElementById('import-error').classList.add('hidden');
+  document.getElementById('confirm-btn').disabled = true;
+  document.getElementById('preview-btn-icon').textContent = '预览';
+  previewData = null;
+}
+
+// Close on backdrop click
+document.getElementById('import-modal').addEventListener('click', e => {
+  if (e.target === document.getElementById('import-modal')) closeImportModal();
+});
+
+// Close on Escape
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeImportModal();
+});
+
+async function previewSkill() {
+  const url = document.getElementById('import-url').value.trim();
+  if (!url) return;
+
+  const btn = document.getElementById('preview-btn-icon');
+  btn.innerHTML = '<svg class="spin w-4 h-4 inline" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>';
+  document.getElementById('import-error').classList.add('hidden');
+  document.getElementById('preview-area').classList.add('hidden');
+  document.getElementById('confirm-btn').disabled = true;
+  previewData = null;
+
+  try {
+    const res = await fetch(`${API}/api/import/preview`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({url}),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || res.statusText);
+    previewData = data;
+    renderPreview(data);
+    document.getElementById('confirm-btn').disabled = false;
+  } catch(e) {
+    document.getElementById('import-error').textContent = e.message;
+    document.getElementById('import-error').classList.remove('hidden');
+  } finally {
+    btn.textContent = '预览';
+  }
+}
+
+function renderPreview(d) {
+  const wrap = document.getElementById('preview-content');
+  wrap.innerHTML = `
+    <div class="flex items-center gap-3">
+      <span class="text-3xl">${d.icon||'⚡'}</span>
+      <div>
+        <div class="font-bold text-base text-slate-100">${d.name}</div>
+        <div class="text-xs text-slate-500 mt-0.5">${d.summary}</div>
+      </div>
+      <span class="ml-auto text-xs border rounded-full px-2 py-0.5 ${colorFor(d.category)}">${d.category||'通用'}</span>
+    </div>
+    <div class="grid grid-cols-3 gap-2 text-xs">
+      <div class="bg-card rounded-lg p-2.5 border border-border">
+        <div class="text-slate-500 mb-0.5">负责人</div>
+        <div class="text-slate-200">${d.owner||'—'}</div>
+      </div>
+      <div class="bg-card rounded-lg p-2.5 border border-border">
+        <div class="text-slate-500 mb-0.5">输出类型</div>
+        <div class="text-slate-200 font-mono uppercase">${d.output_type||'markdown'}</div>
+      </div>
+      <div class="bg-card rounded-lg p-2.5 border border-border">
+        <div class="text-slate-500 mb-0.5">输入字段</div>
+        <div class="text-slate-200">${(d.input_schema||[]).length} 个</div>
+      </div>
+    </div>
+    ${d.execute_url ? `<div class="text-xs text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-3 py-2">
+      ✓ 包含真实执行端点 — Skill 将实际运行 Agent
+    </div>` : `<div class="text-xs text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
+      ℹ 无 execute_url — 将使用 Mock 模式执行
+    </div>`}
+  `;
+  document.getElementById('preview-area').classList.remove('hidden');
+}
+
+async function confirmImport() {
+  if (!previewData) return;
+  const url = document.getElementById('import-url').value.trim();
+  const btn = document.getElementById('confirm-text');
+  const icon = document.getElementById('confirm-icon');
+
+  document.getElementById('confirm-btn').disabled = true;
+  btn.textContent = '导入中…';
+  icon.innerHTML = '<svg class="spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>';
+
+  try {
+    const res = await fetch(`${API}/api/import`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({url}),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail);
+
+    // Success: close modal, reload grid
+    closeImportModal();
+    await load();
+    // Show brief toast
+    showToast(`✓ "${data.name}" 已成功导入`);
+  } catch(e) {
+    document.getElementById('import-error').textContent = e.message;
+    document.getElementById('import-error').classList.remove('hidden');
+    document.getElementById('confirm-btn').disabled = false;
+    btn.textContent = '确认导入';
+    icon.innerHTML = '';
+  }
+}
+
+function showToast(msg) {
+  const t = document.createElement('div');
+  t.className = 'fixed bottom-6 left-1/2 -translate-x-1/2 bg-emerald-600 text-white text-sm font-medium px-5 py-2.5 rounded-full shadow-lg z-50 transition-all';
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => { t.style.opacity='0'; setTimeout(()=>t.remove(),400); }, 2800);
+}
+
+// Allow pressing Enter in URL input to trigger preview
+document.getElementById('import-url').addEventListener('keydown', e => {
+  if (e.key === 'Enter') previewSkill();
+});
+
+load();
+</script>
+</body>
+</html>

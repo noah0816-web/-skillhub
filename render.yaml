@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: skillhub
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: DB_PATH
+        value: /data/skillhub.db
+    disk:
+      name: skillhub-data
+      mountPath: /data
+      sizeGB: 1

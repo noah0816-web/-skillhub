@@ -1,0 +1,63 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# SkillHub 外部 Skill 规范 v1.0
+# 将此文件放到你的 GitHub 仓库，然后把 Raw 链接粘贴到 SkillHub「导入 Skill」即可。
+# ──────────────────────────────────────────────────────────────────────────────
+
+# ── 必填字段 ──────────────────────────────────────────────────────────────────
+name: "我的 AI Skill"          # 显示名称
+summary: "一句话描述这个 Skill 的用途"
+owner: "张三"                  # 负责人姓名
+description: |
+  ## Skill 名称
+
+  详细说明（支持 Markdown）：
+
+  1. 这个 Skill 做什么
+  2. 输入什么数据
+  3. 输出什么结果
+
+  > 任何需要用户了解的约束或注意事项
+
+# ── 可选字段 ──────────────────────────────────────────────────────────────────
+slug: "my-ai-skill"            # URL 友好 ID；省略则自动从 name 生成
+icon: "🚀"                     # 单个 Emoji
+category: "通用"               # 自定义分类名称
+output_type: "markdown"        # markdown | json
+
+# ── 真实执行端点（可选）────────────────────────────────────────────────────────
+# 如果提供，SkillHub 执行时会 POST {"payload": {...}} 到此 URL
+# 响应体需包含 {"result": "..."} 字段
+# 不填则以 Mock 模式运行
+execute_url: ""                # 例：https://my-agent.example.com/run
+
+# ── 输入表单 Schema ────────────────────────────────────────────────────────────
+# 每个字段支持的 type：text | textarea | number | select
+input_schema:
+  - key: query
+    label: 查询内容
+    type: textarea
+    required: true
+    placeholder: "输入你的查询..."
+
+  - key: mode
+    label: 运行模式
+    type: select
+    required: false
+    options:
+      - "快速"
+      - "精准"
+      - "深度"
+    default: "快速"
+
+  - key: max_results
+    label: 最大结果数
+    type: number
+    required: false
+    placeholder: "10"
+    default: "10"
+
+  - key: extra_context
+    label: 补充上下文
+    type: text
+    required: false
+    placeholder: "可选，提供额外背景信息..."

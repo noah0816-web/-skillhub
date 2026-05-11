@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Skill · SkillHub</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            surface: '#0f1117', card: '#161b27', border: '#1e2535',
+            accent: '#3b82f6', accent2: '#6366f1',
+          },
+          fontFamily: { mono: ['JetBrains Mono', 'Fira Code', 'monospace'] },
+        }
+      }
+    }
+  </script>
+  <style>
+    body { background: #0f1117; }
+    .gradient-text { background: linear-gradient(135deg,#3b82f6,#8b5cf6); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+    ::-webkit-scrollbar { width:6px; } ::-webkit-scrollbar-track { background:#0f1117; } ::-webkit-scrollbar-thumb { background:#1e2535; border-radius:3px; }
+
+    /* Markdown output styles */
+    #output-content h2 { font-size:1.1rem; font-weight:700; color:#e2e8f0; margin:1.2rem 0 .5rem; }
+    #output-content h3 { font-size:.95rem; font-weight:600; color:#cbd5e1; margin:1rem 0 .4rem; }
+    #output-content p  { font-size:.85rem; color:#94a3b8; line-height:1.7; margin:.4rem 0; }
+    #output-content ul,#output-content ol { padding-left:1.2rem; }
+    #output-content li { font-size:.85rem; color:#94a3b8; line-height:1.7; }
+    #output-content strong { color:#e2e8f0; }
+    #output-content table { width:100%; border-collapse:collapse; font-size:.82rem; margin:.8rem 0; }
+    #output-content th { background:#1e2535; color:#94a3b8; padding:.5rem .75rem; text-align:left; font-weight:600; }
+    #output-content td { padding:.45rem .75rem; border-top:1px solid #1e2535; color:#cbd5e1; }
+    #output-content blockquote { border-left:2px solid #3b82f6; padding-left:.75rem; color:#64748b; font-style:italic; margin:.5rem 0; }
+    #output-content code { background:#1e2535; padding:.1em .35em; border-radius:4px; font-size:.8rem; font-family:monospace; color:#93c5fd; }
+    #output-content pre { background:#1e2535; padding:1rem; border-radius:8px; overflow-x:auto; margin:.6rem 0; }
+    #output-content pre code { background:none; padding:0; color:#93c5fd; }
+
+    /* JSON output */
+    #output-json { font-size:.8rem; line-height:1.6; }
+
+    /* Spinner */
+    @keyframes spin { to { transform:rotate(360deg); } }
+    .spinner { animation:spin .8s linear infinite; }
+
+    /* Pulse dot */
+    @keyframes pulse-dot { 0%,100%{opacity:1} 50%{opacity:.3} }
+    .pulse { animation:pulse-dot 1.4s ease-in-out infinite; }
+  </style>
+</head>
+<body class="text-slate-200 min-h-screen antialiased">
+
+  <!-- Header -->
+  <header class="border-b border-border sticky top-0 z-40 backdrop-blur bg-surface/90">
+    <div class="max-w-7xl mx-auto px-6 py-4 flex items-center gap-4">
+      <a href="/" class="flex items-center gap-2 text-slate-400 hover:text-slate-200 transition text-sm">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+        </svg>
+        广场
+      </a>
+      <span class="text-border">·</span>
+      <div class="flex items-center gap-2">
+        <span id="hdr-icon" class="text-xl"></span>
+        <span id="hdr-name" class="font-semibold text-sm"></span>
+      </div>
+    </div>
+  </header>
+
+  <div class="max-w-7xl mx-auto px-6 py-8">
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 min-h-[calc(100vh-120px)]">
+
+      <!-- Left: Info + Form -->
+      <div class="flex flex-col gap-5">
+
+        <!-- Skill header card -->
+        <div class="bg-card border border-border rounded-xl p-6">
+          <div class="flex items-start gap-4 mb-4">
+            <div id="skill-icon" class="text-4xl w-14 h-14 flex items-center justify-center bg-surface rounded-xl border border-border shrink-0"></div>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-2 flex-wrap mb-1">
+                <h1 id="skill-name" class="font-bold text-xl text-slate-100"></h1>
+                <span id="skill-category" class="text-xs border rounded-full px-2 py-0.5 uppercase tracking-wide"></span>
+              </div>
+              <p id="skill-summary" class="text-sm text-slate-400"></p>
+            </div>
+          </div>
+          <div class="flex items-center gap-5 text-xs text-slate-500 border-t border-border pt-4 flex-wrap">
+            <span>👤 <span id="skill-owner" class="text-slate-400"></span></span>
+            <span>📊 <span id="skill-calls" class="text-slate-400 font-mono"></span> 次调用</span>
+            <span id="skill-type" class="font-mono bg-surface px-2 py-0.5 rounded border border-border"></span>
+            <span id="skill-synced" class="hidden text-slate-600">同步于 <span id="skill-synced-at"></span></span>
+          </div>
+          <!-- Source row — only shown for externally imported skills -->
+          <div id="source-row" class="hidden flex items-center gap-2 mt-3 pt-3 border-t border-border">
+            <span class="text-xs text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 rounded px-2 py-0.5 font-mono shrink-0">外部引入</span>
+            <a id="source-link" href="#" target="_blank" rel="noopener"
+              class="text-xs text-slate-500 hover:text-slate-300 truncate flex-1 transition font-mono" title=""></a>
+            <button id="sync-btn" onclick="syncSkill()"
+              class="shrink-0 text-xs text-slate-400 hover:text-white border border-border hover:border-accent bg-surface px-3 py-1 rounded-lg transition flex items-center gap-1.5">
+              <svg id="sync-icon" class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+              </svg>
+              同步更新
+            </button>
+          </div>
+        </div>
+
+        <!-- Description -->
+        <div class="bg-card border border-border rounded-xl p-6">
+          <h2 class="text-xs uppercase tracking-widest text-slate-500 mb-3 font-semibold">技能说明</h2>
+          <div id="skill-desc" class="text-sm text-slate-400 leading-relaxed"></div>
+        </div>
+
+        <!-- Input Form -->
+        <div class="bg-card border border-border rounded-xl p-6 flex-1">
+          <h2 class="text-xs uppercase tracking-widest text-slate-500 mb-4 font-semibold">输入参数</h2>
+          <form id="skill-form" class="flex flex-col gap-4">
+            <div id="form-fields"></div>
+            <button type="submit" id="run-btn"
+              class="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-semibold text-sm py-3 rounded-lg transition flex items-center justify-center gap-2 mt-2">
+              <span id="btn-icon">▶</span>
+              <span id="btn-text">执行 Skill</span>
+            </button>
+          </form>
+        </div>
+      </div>
+
+      <!-- Right: Output -->
+      <div class="flex flex-col gap-5">
+        <div class="bg-card border border-border rounded-xl flex flex-col flex-1 overflow-hidden" style="min-height:500px">
+          <!-- Output header -->
+          <div class="flex items-center justify-between px-5 py-3 border-b border-border">
+            <div class="flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full bg-slate-600 pulse" id="status-dot"></span>
+              <span class="text-xs text-slate-400 font-mono" id="status-text">等待执行</span>
+            </div>
+            <button id="copy-btn" class="hidden text-xs text-slate-500 hover:text-slate-300 transition px-2 py-1 rounded border border-border hover:border-slate-500">复制</button>
+          </div>
+
+          <!-- Output body -->
+          <div id="output-area" class="flex-1 p-5 overflow-y-auto">
+            <div id="output-placeholder" class="h-full flex flex-col items-center justify-center text-slate-600 gap-3">
+              <svg class="w-12 h-12 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+              </svg>
+              <p class="text-sm">填写参数后点击执行</p>
+            </div>
+            <div id="output-loading" class="hidden h-full flex items-center justify-center">
+              <div class="flex flex-col items-center gap-4">
+                <svg class="spinner w-8 h-8 text-blue-500" fill="none" viewBox="0 0 24 24">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                </svg>
+                <span class="text-sm text-slate-500">Agent 执行中…</span>
+              </div>
+            </div>
+            <div id="output-content" class="hidden"></div>
+            <pre id="output-json" class="hidden text-green-400 font-mono whitespace-pre-wrap break-all text-xs leading-relaxed"></pre>
+            <div id="output-error" class="hidden text-red-400 text-sm p-4 bg-red-500/10 rounded-lg border border-red-500/20"></div>
+          </div>
+        </div>
+
+        <!-- Execution history stub -->
+        <div class="bg-card border border-border rounded-xl p-5">
+          <h2 class="text-xs uppercase tracking-widest text-slate-500 mb-3 font-semibold">本会话执行记录</h2>
+          <div id="history-list" class="flex flex-col gap-2 text-xs text-slate-500">
+            <span class="italic">暂无记录</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+const slug = location.pathname.split('/skill/')[1];
+const API = '';
+let outputType = 'markdown';
+let lastResult = '';
+const history = [];
+
+const CATEGORY_COLORS = {
+  '射频/天线': 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20',
+  '竞品情报':  'bg-purple-500/10 text-purple-400 border-purple-500/20',
+  '质量/可靠性':'bg-amber-500/10 text-amber-400 border-amber-500/20',
+  '供应链':    'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+  '通用':      'bg-blue-500/10 text-blue-400 border-blue-500/20',
+};
+
+async function load() {
+  const skill = await fetch(`${API}/api/skills/${slug}`).then(r => {
+    if (!r.ok) { location.href = '/'; } return r.json();
+  });
+
+  outputType = skill.output_type;
+  document.title = `${skill.name} · SkillHub`;
+
+  // Header
+  document.getElementById('hdr-icon').textContent = skill.icon;
+  document.getElementById('hdr-name').textContent = skill.name;
+
+  // Card
+  document.getElementById('skill-icon').textContent = skill.icon;
+  document.getElementById('skill-name').textContent = skill.name;
+  const catEl = document.getElementById('skill-category');
+  catEl.textContent = skill.category;
+  catEl.className = `text-xs border rounded-full px-2 py-0.5 uppercase tracking-wide ${CATEGORY_COLORS[skill.category] || CATEGORY_COLORS['通用']}`;
+  document.getElementById('skill-summary').textContent = skill.summary;
+  document.getElementById('skill-owner').textContent = skill.owner;
+  document.getElementById('skill-calls').textContent = skill.call_count.toLocaleString();
+  document.getElementById('skill-type').textContent = skill.output_type.toUpperCase();
+
+  // Source / sync row
+  if (skill.source_url) {
+    document.getElementById('source-row').classList.remove('hidden');
+    const link = document.getElementById('source-link');
+    link.href  = skill.source_url;
+    link.title = skill.source_url;
+    link.textContent = skill.source_url.replace(/^https?:\/\//, '');
+  }
+  if (skill.last_synced_at) {
+    const d = new Date(skill.last_synced_at);
+    document.getElementById('skill-synced-at').textContent = d.toLocaleString('zh-CN', {month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});
+    document.getElementById('skill-synced').classList.remove('hidden');
+  }
+
+  // Description (markdown)
+  document.getElementById('skill-desc').innerHTML = marked.parse(skill.description);
+
+  // Form
+  buildForm(skill.input_schema);
+}
+
+function buildForm(schema) {
+  const wrap = document.getElementById('form-fields');
+  wrap.innerHTML = '';
+  schema.forEach(field => {
+    const div = document.createElement('div');
+    div.className = 'flex flex-col gap-1.5';
+
+    const label = document.createElement('label');
+    label.className = 'text-xs text-slate-400 font-medium flex items-center gap-1';
+    label.textContent = field.label;
+    if (field.required) {
+      const req = document.createElement('span');
+      req.textContent = '*'; req.className = 'text-red-400';
+      label.appendChild(req);
+    }
+
+    let input;
+    const base = 'bg-surface border border-border rounded-lg text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition w-full';
+
+    if (field.type === 'textarea') {
+      input = document.createElement('textarea');
+      input.rows = 5;
+      input.className = `${base} p-3 resize-y min-h-[100px]`;
+    } else if (field.type === 'select') {
+      input = document.createElement('select');
+      input.className = `${base} px-3 py-2.5`;
+      (field.options || []).forEach(opt => {
+        const o = document.createElement('option');
+        o.value = opt; o.textContent = opt;
+        if (opt === field.default) o.selected = true;
+        input.appendChild(o);
+      });
+    } else {
+      input = document.createElement('input');
+      input.type = field.type === 'number' ? 'number' : 'text';
+      input.className = `${base} px-3 py-2.5`;
+      if (field.placeholder) input.placeholder = field.placeholder;
+      if (field.default !== undefined) input.value = field.default;
+    }
+
+    input.name = field.key;
+    if (field.required) input.required = true;
+    div.appendChild(label);
+    div.appendChild(input);
+    wrap.appendChild(div);
+  });
+}
+
+function setStatus(state) {
+  const dot = document.getElementById('status-dot');
+  const txt = document.getElementById('status-text');
+  const states = {
+    idle:    ['bg-slate-600', '等待执行'],
+    running: ['bg-blue-500',  '执行中…'],
+    success: ['bg-green-500', '执行完成'],
+    error:   ['bg-red-500',   '执行失败'],
+  };
+  const [color, label] = states[state] || states.idle;
+  dot.className = `w-2 h-2 rounded-full ${color} pulse`;
+  txt.textContent = label;
+}
+
+function showOutput(result) {
+  lastResult = result;
+  document.getElementById('output-placeholder').classList.add('hidden');
+  document.getElementById('output-loading').classList.add('hidden');
+  document.getElementById('output-error').classList.add('hidden');
+  document.getElementById('copy-btn').classList.remove('hidden');
+
+  if (outputType === 'json') {
+    let formatted;
+    try { formatted = JSON.stringify(JSON.parse(result), null, 2); } catch { formatted = result; }
+    document.getElementById('output-json').textContent = formatted;
+    document.getElementById('output-json').classList.remove('hidden');
+    document.getElementById('output-content').classList.add('hidden');
+  } else {
+    document.getElementById('output-content').innerHTML = marked.parse(result);
+    document.getElementById('output-content').classList.remove('hidden');
+    document.getElementById('output-json').classList.add('hidden');
+  }
+}
+
+function showError(msg) {
+  document.getElementById('output-placeholder').classList.add('hidden');
+  document.getElementById('output-loading').classList.add('hidden');
+  document.getElementById('output-error').textContent = `错误：${msg}`;
+  document.getElementById('output-error').classList.remove('hidden');
+}
+
+function addHistory(payload, ok) {
+  history.unshift({ time: new Date().toLocaleTimeString(), ok, keys: Object.keys(payload) });
+  const list = document.getElementById('history-list');
+  list.innerHTML = history.slice(0, 5).map(h =>
+    `<div class="flex items-center gap-2">
+      <span class="${h.ok ? 'text-green-500' : 'text-red-500'}">${h.ok ? '✓' : '✗'}</span>
+      <span class="font-mono text-slate-600">${h.time}</span>
+      <span class="text-slate-500">${h.keys.join(', ')}</span>
+    </div>`
+  ).join('');
+}
+
+document.getElementById('skill-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const btn = document.getElementById('run-btn');
+  const btnText = document.getElementById('btn-text');
+  const btnIcon = document.getElementById('btn-icon');
+
+  const payload = {};
+  new FormData(e.target).forEach((v, k) => { if (v) payload[k] = v; });
+
+  // Loading state
+  btn.disabled = true;
+  btnText.textContent = '执行中…';
+  btnIcon.innerHTML = '<svg class="spinner w-4 h-4" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>';
+  setStatus('running');
+  document.getElementById('output-placeholder').classList.add('hidden');
+  document.getElementById('output-loading').classList.remove('hidden');
+  document.getElementById('output-content').classList.add('hidden');
+  document.getElementById('output-json').classList.add('hidden');
+  document.getElementById('output-error').classList.add('hidden');
+  document.getElementById('copy-btn').classList.add('hidden');
+
+  try {
+    const res = await fetch(`${API}/api/skills/${slug}/execute`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ payload }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || res.statusText);
+    showOutput(data.result);
+    setStatus('success');
+    addHistory(payload, true);
+  } catch (err) {
+    showError(err.message);
+    setStatus('error');
+    addHistory(payload, false);
+  } finally {
+    btn.disabled = false;
+    btnText.textContent = '执行 Skill';
+    btnIcon.textContent = '▶';
+  }
+});
+
+document.getElementById('copy-btn').addEventListener('click', () => {
+  navigator.clipboard.writeText(lastResult).then(() => {
+    const btn = document.getElementById('copy-btn');
+    btn.textContent = '已复制 ✓';
+    setTimeout(() => { btn.textContent = '复制'; }, 1500);
+  });
+});
+
+async function syncSkill() {
+  const btn  = document.getElementById('sync-btn');
+  const icon = document.getElementById('sync-icon');
+  btn.disabled = true;
+  icon.innerHTML = '<svg class="spinner w-3 h-3" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>';
+
+  try {
+    const res = await fetch(`${API}/api/skills/${slug}/sync`, { method: 'POST' });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail);
+    // Reload page to reflect updates
+    location.reload();
+  } catch(e) {
+    alert(`同步失败：${e.message}`);
+    btn.disabled = false;
+    icon.innerHTML = `<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+        d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+    </svg>`;
+  }
+}
+
+load();
+</script>
+</body>
+</html>
