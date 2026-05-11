@@ -267,23 +267,57 @@ def _fetch(url: str) -> str:
     return r.text
 
 
-REQUIRED = {"name", "summary", "owner", "description"}
+REQUIRED = {"name"}
 
 def _parse(text: str) -> dict:
-    try:
-        data = yaml.safe_load(text)
-        if not isinstance(data, dict):
-            raise ValueError("根节点必须是 mapping")
-    except yaml.YAMLError:
-        data = json.loads(text)
-    missing = REQUIRED - data.keys()
-    if missing:
-        raise ValueError(f"缺少必填字段: {', '.join(sorted(missing))}")
+    """Parse YAML skill file OR SKILL.md with frontmatter."""
+    # Markdown with YAML frontmatter (SKILL.md format)
+    if text.lstrip().startswith("---"):
+        parts = text.lstrip().split("---", 2)
+        if len(parts) >= 3:
+            try:
+                fm   = yaml.safe_load(parts[1]) or {}
+                body = parts[2].strip()
+            except yaml.YAMLError:
+                fm, body = {}, text
+        else:
+            fm, body = {}, text
+
+        data = {
+            "name":        fm.get("name", ""),
+            "summary":     fm.get("description", fm.get("summary", "")),
+            "owner":       fm.get("origin", fm.get("author", fm.get("owner", "社区"))),
+            "description": body or fm.get("description", ""),
+            "category":    fm.get("category", "AI 工具"),
+            "icon":        fm.get("icon", "⚡"),
+            "output_type": fm.get("output_type", "markdown"),
+            "input_schema":fm.get("input_schema", [
+                {"key": "input", "label": "输入", "type": "textarea", "required": True}
+            ]),
+        }
+    else:
+        # Pure YAML
+        try:
+            data = yaml.safe_load(text)
+            if not isinstance(data, dict):
+                raise ValueError("根节点必须是 mapping")
+        except yaml.YAMLError:
+            data = json.loads(text)
+
+    if not data.get("name"):
+        raise ValueError("缺少必填字段: name")
+    if not data.get("summary"):
+        data["summary"] = data["description"][:80] if data.get("description") else data["name"]
+    if not data.get("description"):
+        data["description"] = data["summary"]
+    if not data.get("owner"):
+        data["owner"] = "社区"
+
     data.setdefault("slug",         slugify(data["name"]))
     data.setdefault("icon",         "⚡")
-    data.setdefault("category",     "通用")
+    data.setdefault("category",     "AI 工具")
     data.setdefault("output_type",  "markdown")
-    data.setdefault("input_schema", [])
+    data.setdefault("input_schema", [{"key": "input", "label": "输入", "type": "textarea", "required": True}])
     data.setdefault("status",       "active")
     data.setdefault("call_count",   0)
     return data
@@ -294,32 +328,40 @@ def preview_url(url: str) -> dict:
 
 
 def scan_github_repo(repo_url: str) -> list[dict]:
-    """Given a GitHub repo URL, return a list of yaml files with their raw URLs."""
+    """Return list of importable skill files (SKILL.md, .md, .yaml) in a GitHub repo."""
     m = re.match(r"https?://github\.com/([^/]+)/([^/]+?)(?:\.git)?/?$", repo_url)
     if not m:
         return []
     owner, repo = m.groups()
-    # Get default branch
     meta = httpx.get(f"https://api.github.com/repos/{owner}/{repo}", timeout=10)
     meta.raise_for_status()
     branch = meta.json().get("default_branch", "main")
-    # List all files recursively
     tree = httpx.get(
         f"https://api.github.com/repos/{owner}/{repo}/git/trees/{branch}?recursive=1",
         timeout=15,
     )
     tree.raise_for_status()
     files = tree.json().get("tree", [])
-    yaml_files = [
-        f for f in files
-        if f["type"] == "blob" and (f["path"].endswith(".yaml") or f["path"].endswith(".yml"))
-    ]
+
+    def is_skill_file(path: str) -> bool:
+        lower = path.lower()
+        fname = lower.split("/")[-1]
+        return (
+            fname == "skill.md"
+            or lower.endswith(".yaml")
+            or lower.endswith(".yml")
+            or lower.endswith(".md")
+        )
+
     return [
         {
-            "path": f["path"],
+            "path":    f["path"],
             "raw_url": f"https://raw.githubusercontent.com/{owner}/{repo}/{branch}/{f['path']}",
+            "type":    "SKILL.md" if f["path"].lower().endswith("skill.md")
+                       else ("yaml" if f["path"].endswith((".yaml",".yml")) else "md"),
         }
-        for f in yaml_files
+        for f in files
+        if f["type"] == "blob" and is_skill_file(f["path"])
     ]
 
 

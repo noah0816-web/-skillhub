@@ -150,7 +150,7 @@ input_schema:
                 st.warning("该仓库中未找到 .yaml / .yml 文件")
             else:
                 st.success(f"找到 {len(files)} 个 yaml 文件，选择要导入的：")
-                options = {f["path"]: f["raw_url"] for f in files}
+                options = {f"{f['path']}  [{f['type']}]": f["raw_url"] for f in files}
                 selected = st.multiselect("选择文件", list(options.keys()))
 
                 if selected and st.button(f"✓ 导入选中的 {len(selected)} 个文件", type="primary", use_container_width=True):
