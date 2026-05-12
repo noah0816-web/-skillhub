@@ -35,6 +35,7 @@ class Skill(Base):
     source_url     = Column(String(500), nullable=True)
     execute_url    = Column(String(500), nullable=True)
     last_synced_at = Column(DateTime(timezone=True), nullable=True)
+    raw_content    = Column(Text,        nullable=True)   # original fetched file
     created_at     = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
 
@@ -200,7 +201,12 @@ def init_db():
 
 
 def _run_migrations():
-    new_cols = [("source_url","TEXT"), ("execute_url","TEXT"), ("last_synced_at","DATETIME")]
+    new_cols = [
+        ("source_url",     "TEXT"),
+        ("execute_url",    "TEXT"),
+        ("last_synced_at", "DATETIME"),
+        ("raw_content",    "TEXT"),
+    ]
     with engine.connect() as conn:
         existing = {r[1] for r in conn.execute(text("PRAGMA table_info(skills)"))}
         for col, typ in new_cols:
@@ -366,9 +372,11 @@ def scan_github_repo(repo_url: str) -> list[dict]:
 
 
 def import_url(url: str) -> dict:
-    data = _parse(_fetch(url))
+    raw = _fetch(url)
+    data = _parse(raw)
     data["source_url"]     = url
     data["last_synced_at"] = datetime.now(timezone.utc)
+    data["raw_content"]    = raw
     db = Session()
     existing = db.query(Skill).filter(Skill.slug == data["slug"]).first()
     if existing:
@@ -386,12 +394,14 @@ def sync_skill(slug: str) -> dict:
     skill = get_skill(slug)
     if not skill or not skill.get("source_url"):
         raise ValueError("该 Skill 没有 source_url")
-    data = _parse(_fetch(skill["source_url"]))
+    raw = _fetch(skill["source_url"])
+    data = _parse(raw)
     db = Session()
     row = db.query(Skill).filter(Skill.slug == slug).first()
     for k, v in data.items():
         if k not in ("id", "created_at", "call_count", "slug"):
             setattr(row, k, v)
+    row.raw_content    = raw
     row.last_synced_at = datetime.now(timezone.utc)
     db.commit()
     db.close()

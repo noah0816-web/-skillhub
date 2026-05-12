@@ -82,6 +82,13 @@ st.markdown("""
   background: #161b27; border: 1px solid #1e2535;
   border-radius: 12px; padding: 1.25rem; min-height: 200px;
 }
+.installable-badge {
+  position: absolute; top: .75rem; right: .75rem;
+  font-size: .62rem; font-weight: 600;
+  background: rgba(52,211,153,.12); color: #34d399;
+  border: 1px solid rgba(52,211,153,.3);
+  border-radius: 4px; padding: .1rem .45rem;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -290,10 +297,15 @@ def show_grid():
     # Build card HTML
     cards_html = '<div class="skill-grid">'
     for s in skills:
-        ext = '<span class="ext-badge">外部引入</span>' if s.get("source_url") else ""
+        if s.get("raw_content"):
+            badge = '<span class="installable-badge">可安装</span>'
+        elif s.get("source_url"):
+            badge = '<span class="ext-badge">外部引入</span>'
+        else:
+            badge = ""
         cards_html += f"""
         <a class="skill-card" href="?skill={s['slug']}">
-          {ext}
+          {badge}
           <span class="card-icon">{s['icon']}</span>
           <span class="card-cat {cat_class(s['category'])}">{s['category']}</span>
           <p class="card-name">{s['name']}</p>
@@ -323,6 +335,7 @@ def show_detail(slug: str):
     _cc = cat_class(skill["category"])
     stars = fetch_github_stars(skill.get("source_url") or "")
     star_str = f"  ·  ⭐ {stars:,}" if stars is not None else ""
+    has_real_file = bool(skill.get("raw_content"))
 
     st.markdown(f'<span class="card-cat {_cc}">{skill["category"]}</span>', unsafe_allow_html=True)
     st.markdown(f"## {skill['icon']} {skill['name']}")
@@ -330,7 +343,16 @@ def show_detail(slug: str):
         f'<p style="color:#94a3b8;font-size:1rem;margin:-.5rem 0 .5rem">{skill["summary"]}</p>',
         unsafe_allow_html=True,
     )
-    st.caption(f"👤 {skill['owner']}  ·  {skill['output_type'].upper()}  ·  {skill['call_count']:,} 次下载{star_str}")
+    install_label = (
+        '<span style="color:#34d399;font-size:.8rem">✅ 可安装</span>'
+        if has_real_file else
+        '<span style="color:#94a3b8;font-size:.8rem">📄 仅描述</span>'
+    )
+    st.markdown(
+        f'👤 {skill["owner"]}  ·  {skill["output_type"].upper()}  ·  '
+        f'{skill["call_count"]:,} 次下载{star_str}  ·  {install_label}',
+        unsafe_allow_html=True,
+    )
 
     st.divider()
 
@@ -365,51 +387,45 @@ def show_detail(slug: str):
                     "owner", "input_schema", "output_type", "execute_url", "source_url"]
         _dl_data = {k: skill[k] for k in _dl_keys if skill.get(k) not in (None, "", [])}
 
-        # SKILL.md content (Claude Code format)
-        schema_section = ""
-        if skill.get("input_schema"):
-            rows = "\n".join(
-                f"| {f['label']} | `{f.get('type','text')}` | {'是' if f.get('required') else '否'} | {f.get('placeholder', '')} |"
-                for f in skill["input_schema"]
-            )
-            schema_section = f"\n\n## 输入参数\n\n| 参数 | 类型 | 必填 | 示例 |\n|------|------|------|------|\n{rows}"
-
-        skill_md = (
-            f"---\nname: {skill['name']}\ndescription: {skill['summary']}\n"
-            f"category: {skill['category']}\nowner: {skill['owner']}\n"
-            f"output_type: {skill['output_type']}\n---\n\n"
-            f"{skill['description']}{schema_section}"
-        )
-
         col_a, col_b = st.columns(2)
         with col_a:
             st.download_button(
-                "⬇ YAML",
+                "⬇ YAML（目录格式）",
                 data=yaml.dump(_dl_data, allow_unicode=True, sort_keys=False),
                 file_name=f"{skill['slug']}.yaml",
                 mime="text/yaml",
                 use_container_width=True,
             )
         with col_b:
-            st.download_button(
-                "⬇ SKILL.md",
-                data=skill_md,
-                file_name=f"{skill['slug']}.md",
-                mime="text/markdown",
-                use_container_width=True,
-            )
+            if has_real_file:
+                st.download_button(
+                    "⬇ SKILL.md（可安装）",
+                    data=skill["raw_content"],
+                    file_name=f"{skill['slug']}.md",
+                    mime="text/markdown",
+                    use_container_width=True,
+                )
+            else:
+                st.button(
+                    "⬇ SKILL.md（暂无）",
+                    disabled=True,
+                    use_container_width=True,
+                    help="此条目无真实实现文件。请点击下方来源链接前往 GitHub 查找原始 SKILL.md。",
+                )
 
-        st.markdown("""
+        if has_real_file:
+            st.markdown("""
 <div style="background:#161b27;border:1px solid #1e2535;border-radius:12px;padding:1.1rem 1.25rem;margin-top:.75rem">
 <p style="color:#64748b;font-size:.75rem;margin:0 0 .9rem;font-weight:600;letter-spacing:.07em;text-transform:uppercase">在 Claude Code 中使用</p>
 """, unsafe_allow_html=True)
-
-        st.markdown("**Step 1** — 下载 `SKILL.md` 文件")
-        st.markdown("**Step 2** — 安装到 Skills 目录")
-        st.code(f"mv ~/Downloads/{skill['slug']}.md ~/.claude/skills/{skill['slug']}.md", language="bash")
-        st.markdown("**Step 3** — 在 Claude Code 中调用")
-        st.code(f"/{skill['slug']}", language="bash")
-        st.markdown("</div>", unsafe_allow_html=True)
+            st.markdown("**Step 1** — 下载 `SKILL.md` 文件")
+            st.markdown("**Step 2** — 安装到 Skills 目录")
+            st.code(f"mv ~/Downloads/{skill['slug']}.md ~/.claude/skills/{skill['slug']}.md", language="bash")
+            st.markdown("**Step 3** — 在 Claude Code 中调用")
+            st.code(f"/{skill['slug']}", language="bash")
+            st.markdown("</div>", unsafe_allow_html=True)
+        else:
+            st.info("此条目为描述性卡片，暂无可安装实现。点击下方来源链接前往 GitHub 查找真实 SKILL.md 文件。", icon="ℹ️")
 
         # ── Source ──────────────────────────────────────────────────────────────
         if skill.get("source_url"):
