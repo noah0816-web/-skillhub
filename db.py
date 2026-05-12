@@ -99,7 +99,6 @@ def _seed_from_repos():
             files = scan_github_repo(repo_url)
         except Exception:
             continue
-        # Prioritise SKILL.md and yaml; skip plain .md files (likely READMEs)
         installable = [
             f for f in files
             if f["path"].lower().endswith(("skill.md", ".yaml", ".yml"))
@@ -109,6 +108,19 @@ def _seed_from_repos():
                 import_url(f["raw_url"])
             except Exception:
                 continue
+
+
+def reseed(clear_existing: bool = True) -> int:
+    """Admin: wipe all skills and re-import from SEED_REPOS. Returns count imported."""
+    if clear_existing:
+        db = Session()
+        db.query(Skill).delete()
+        db.commit()
+        db.close()
+    before = Session().query(Skill).count()
+    _seed_from_repos()
+    after = Session().query(Skill).count()
+    return after - before
 
 
 def _run_migrations():

@@ -6,7 +6,7 @@ import streamlit as st
 from db import (
     init_db, get_all_skills, get_categories,
     get_skill, preview_url, import_url, sync_skill,
-    scan_github_repo,
+    scan_github_repo, reseed,
 )
 
 # ── Page config ───────────────────────────────────────────────────────────────
@@ -242,7 +242,7 @@ input_schema:
 
 def show_grid():
     # Header
-    h1, h2 = st.columns([6, 1])
+    h1, h2, h3 = st.columns([6, 1, 0.4])
     with h1:
         st.markdown("# 硬件工程 skillhub")
         st.caption("集中展示团队外部精选的通用skills。支持从Github&任意公共网站一键引入外部Skill")
@@ -250,6 +250,10 @@ def show_grid():
         st.write("")
         if st.button("＋ 导入 Skill", type="primary", use_container_width=True):
             import_dialog()
+    with h3:
+        st.write("")
+        if st.button("⚙", use_container_width=True, help="管理员操作"):
+            admin_dialog()
 
     st.divider()
 
@@ -453,6 +457,34 @@ def show_detail(slug: str):
                     except Exception as e:
                         st.error(str(e))
 
+
+
+# ── Admin panel ──────────────────────────────────────────────────────────────
+
+@st.dialog("管理员操作", width="small")
+def admin_dialog():
+    pwd = st.text_input("管理员密码", type="password", placeholder="输入密码后操作")
+    ADMIN_PWD = st.secrets.get("ADMIN_PASSWORD", "hw2025admin")
+
+    if pwd and pwd != ADMIN_PWD:
+        st.error("密码错误")
+        return
+    if not pwd:
+        return
+
+    st.success("已验证")
+    st.divider()
+
+    st.markdown("**重新 Seed**　清空现有数据，从所有仓库重新导入")
+    st.caption(f"共 {len(__import__('db').SEED_REPOS)} 个仓库，预计 2-5 分钟")
+    if st.button("🔄 清空并重新导入", type="primary", use_container_width=True):
+        with st.spinner("正在扫描并导入，请稍候…"):
+            try:
+                n = reseed(clear_existing=True)
+                st.success(f"完成！共导入 {n} 个 Skill")
+                st.rerun()
+            except Exception as e:
+                st.error(f"失败：{e}")
 
 
 # ── Router ────────────────────────────────────────────────────────────────────
