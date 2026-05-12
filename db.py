@@ -52,9 +52,49 @@ def _row_to_dict(s: Skill) -> dict:
 
 # ── DB init ───────────────────────────────────────────────────────────────────
 
+SEED_REPOS = [
+    "https://github.com/anthropics/skills",
+    "https://github.com/openai/skills",
+    "https://github.com/thedotmack/claude-mem",
+    "https://github.com/wshobson/agents",
+    "https://github.com/VoltAgent/awesome-agent-skills",
+    "https://github.com/OthmanAdi/planning-with-files",
+    "https://github.com/K-Dense-AI/scientific-agent-skills",
+    "https://github.com/alirezarezvani/claude-skills",
+    "https://github.com/yusufkaraaslan/Skill_Seekers",
+    "https://github.com/Lum1104/Understand-Anything",
+    "https://github.com/teng-lin/notebooklm-py",
+    "https://github.com/Orchestra-Research/AI-Research-SKILLs",
+]
+
+
 def init_db():
     Base.metadata.create_all(engine)
     _run_migrations()
+    db = Session()
+    is_empty = db.query(Skill).count() == 0
+    db.close()
+    if is_empty:
+        _seed_from_repos()
+
+
+def _seed_from_repos():
+    """Scan SEED_REPOS, import every SKILL.md / .yaml / .yml found. Skip on any error."""
+    for repo_url in SEED_REPOS:
+        try:
+            files = scan_github_repo(repo_url)
+        except Exception:
+            continue
+        # Prioritise SKILL.md and yaml; skip plain .md files (likely READMEs)
+        installable = [
+            f for f in files
+            if f["path"].lower().endswith(("skill.md", ".yaml", ".yml"))
+        ]
+        for f in installable:
+            try:
+                import_url(f["raw_url"])
+            except Exception:
+                continue
 
 
 def _run_migrations():
