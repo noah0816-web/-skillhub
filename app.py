@@ -6,7 +6,7 @@ import streamlit as st
 from db import (
     init_db, get_all_skills, get_categories,
     get_skill, preview_url, import_url, sync_skill,
-    scan_github_repo, reseed, get_seed_state,
+    scan_github_repo, reseed, get_seed_state, delete_skill,
 )
 
 # ── Page config ───────────────────────────────────────────────────────────────
@@ -523,6 +523,20 @@ def admin_dialog():
     st.success("已验证")
     st.divider()
 
+    st.markdown("**删除单个 Skill**")
+    del_slug = st.text_input("输入 Skill slug（如 claude-code-review）", key="del_slug_input")
+    if del_slug:
+        skill_to_del = get_skill(del_slug.strip())
+        if skill_to_del:
+            st.caption(f"将删除：{skill_to_del['icon']} {skill_to_del['name']}")
+            if st.button("🗑 确认删除", type="primary", use_container_width=True):
+                delete_skill(del_slug.strip())
+                st.success(f"✅ 已删除 `{del_slug.strip()}`")
+                st.rerun()
+        else:
+            st.warning(f"未找到 slug = `{del_slug.strip()}`")
+
+    st.divider()
     st.markdown("**重新 Seed**　清空现有数据，从所有仓库重新导入")
     st.caption(f"共 {len(__import__('db').SEED_REPOS)} 个仓库，并发扫描，约 30-60 秒")
 

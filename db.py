@@ -269,6 +269,18 @@ def increment_calls(slug: str):
     db.close()
 
 
+def delete_skill(slug: str) -> bool:
+    db = Session()
+    row = db.query(Skill).filter(Skill.slug == slug).first()
+    if row:
+        db.delete(row)
+        db.commit()
+        db.close()
+        return True
+    db.close()
+    return False
+
+
 # ── URL import ────────────────────────────────────────────────────────────────
 
 def _normalize_url(url: str) -> str:
