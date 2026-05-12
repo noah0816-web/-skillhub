@@ -1,6 +1,7 @@
 import json
 import os
 import re
+import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 
@@ -11,16 +12,8 @@ from sqlalchemy.orm import declarative_base, sessionmaker
 
 # ── Database setup ────────────────────────────────────────────────────────────
 
-DATABASE_URL = os.environ.get("DATABASE_URL")
-
-if DATABASE_URL:
-    # PostgreSQL (Supabase / Render) — Supabase gives postgres:// prefix, SQLAlchemy needs postgresql://
-    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
-    engine = create_engine(DATABASE_URL, pool_pre_ping=True, pool_size=5, max_overflow=10)
-else:
-    # Fallback: local SQLite for development
-    DB_PATH = os.environ.get("DB_PATH", "skillhub.db")
-    engine = create_engine(f"sqlite:///{DB_PATH}", connect_args={"check_same_thread": False})
+DB_PATH = os.environ.get("DB_PATH", "skillhub.db")
+engine = create_engine(f"sqlite:///{DB_PATH}", connect_args={"check_same_thread": False})
 Session = sessionmaker(bind=engine)
 Base = declarative_base()
 
@@ -91,6 +84,22 @@ SEED_REPOS = [
 ]
 
 
+# ── Background seed state ─────────────────────────────────────────────────────
+
+_seed_state = {"status": "idle", "done": 0, "total": 0}
+_seed_lock  = threading.Lock()
+
+
+def get_seed_state() -> dict:
+    with _seed_lock:
+        return dict(_seed_state)
+
+
+def _set_seed(status, done=0, total=0):
+    with _seed_lock:
+        _seed_state.update(status=status, done=done, total=total)
+
+
 def init_db():
     Base.metadata.create_all(engine)
     _run_migrations()
@@ -98,7 +107,44 @@ def init_db():
     is_empty = db.query(Skill).count() == 0
     db.close()
     if is_empty:
-        reseed(clear_existing=False)
+        _start_background_seed()
+
+
+def _start_background_seed():
+    _set_seed("running")
+    t = threading.Thread(target=_background_seed_worker, daemon=True)
+    t.start()
+
+
+def _background_seed_worker():
+    try:
+        fetched = _fetch_all_files()
+        total = len(fetched)
+        _set_seed("running", done=0, total=total)
+        imported = 0
+        for i, (url, raw) in enumerate(fetched):
+            try:
+                data = _parse(raw)
+                data["source_url"]     = url
+                data["last_synced_at"] = datetime.now(timezone.utc)
+                data["raw_content"]    = raw
+                db = Session()
+                existing = db.query(Skill).filter(Skill.slug == data["slug"]).first()
+                if existing:
+                    for k, v in data.items():
+                        if k not in ("id", "created_at", "call_count"):
+                            setattr(existing, k, v)
+                else:
+                    db.add(Skill(**{k: v for k, v in data.items() if hasattr(Skill, k)}))
+                db.commit()
+                db.close()
+                imported += 1
+            except Exception:
+                pass
+            _set_seed("running", done=i + 1, total=total)
+        _set_seed("done", done=imported, total=total)
+    except Exception as e:
+        _set_seed("error", done=0, total=0)
 
 
 def _fetch_all_files() -> list[tuple[str, str]]:
@@ -132,22 +178,15 @@ def _fetch_all_files() -> list[tuple[str, str]]:
 
 
 def reseed(clear_existing: bool = True, on_progress=None) -> int:
-    """Admin: wipe all skills and re-import from SEED_REPOS. Returns count imported.
-
-    on_progress(done, total) is called from the MAIN thread after each DB write,
-    so it is safe to call Streamlit UI functions inside it.
-    """
+    """Admin: wipe all skills and re-import. Runs synchronously (for admin dialog)."""
     if clear_existing:
         db = Session()
         db.query(Skill).delete()
         db.commit()
         db.close()
 
-    # All network I/O done concurrently here (no UI calls)
     fetched = _fetch_all_files()
     total = len(fetched)
-
-    # DB writes + progress updates happen serially in the caller's thread
     imported = 0
     for i, (url, raw) in enumerate(fetched):
         try:
@@ -170,42 +209,21 @@ def reseed(clear_existing: bool = True, on_progress=None) -> int:
             pass
         if on_progress:
             on_progress(i + 1, total)
-
     return imported
 
 
 def _run_migrations():
     with engine.connect() as conn:
-        is_pg = engine.dialect.name == "postgresql"
-        if is_pg:
-            # PostgreSQL: use information_schema to check existing columns
-            existing = {
-                r[0] for r in conn.execute(text(
-                    "SELECT column_name FROM information_schema.columns "
-                    "WHERE table_name = 'skills'"
-                ))
-            }
-            new_cols = [
-                ("source_url",     "TEXT"),
-                ("execute_url",    "TEXT"),
-                ("last_synced_at", "TIMESTAMPTZ"),
-                ("raw_content",    "TEXT"),
-            ]
-        else:
-            # SQLite
-            existing = {r[1] for r in conn.execute(text("PRAGMA table_info(skills)"))}
-            new_cols = [
-                ("source_url",     "TEXT"),
-                ("execute_url",    "TEXT"),
-                ("last_synced_at", "DATETIME"),
-                ("raw_content",    "TEXT"),
-            ]
-
+        existing = {r[1] for r in conn.execute(text("PRAGMA table_info(skills)"))}
+        new_cols = [
+            ("source_url",     "TEXT"),
+            ("execute_url",    "TEXT"),
+            ("last_synced_at", "DATETIME"),
+            ("raw_content",    "TEXT"),
+        ]
         for col, typ in new_cols:
             if col not in existing:
                 conn.execute(text(f"ALTER TABLE skills ADD COLUMN {col} {typ}"))
-
-        # Remove description-only entries (no real file)
         conn.execute(text(
             "DELETE FROM skills WHERE source_url IS NOT NULL "
             "AND (raw_content IS NULL OR raw_content = '')"

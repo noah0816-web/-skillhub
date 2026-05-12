@@ -6,7 +6,7 @@ import streamlit as st
 from db import (
     init_db, get_all_skills, get_categories,
     get_skill, preview_url, import_url, sync_skill,
-    scan_github_repo, reseed,
+    scan_github_repo, reseed, get_seed_state,
 )
 
 # ── Page config ───────────────────────────────────────────────────────────────
@@ -19,6 +19,28 @@ st.set_page_config(
 )
 
 init_db()
+
+# ── Startup loading screen ────────────────────────────────────────────────────
+
+seed = get_seed_state()
+if seed["status"] == "running":
+    pct = int(seed["done"] / max(seed["total"], 1) * 100) if seed["total"] else 0
+    st.markdown("""
+<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;
+            min-height:70vh;text-align:center;gap:1.5rem">
+  <div style="font-size:3rem">⚡</div>
+  <h2 style="color:#e2e8f0;margin:0">硬件工程 skillhub</h2>
+  <p style="color:#64748b;margin:0">正在从 GitHub 导入 Skills，请稍候…</p>
+</div>
+""", unsafe_allow_html=True)
+    if seed["total"]:
+        st.progress(pct, text=f"已导入 {seed['done']} / {seed['total']} 个文件")
+    else:
+        st.progress(0, text="正在扫描仓库…")
+    st.caption("页面将自动刷新，无需手动操作")
+    # Auto-refresh every 3 seconds
+    st.markdown("""<meta http-equiv="refresh" content="3">""", unsafe_allow_html=True)
+    st.stop()
 
 # ── Global CSS ────────────────────────────────────────────────────────────────
 
