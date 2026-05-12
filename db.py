@@ -90,53 +90,80 @@ def init_db():
     is_empty = db.query(Skill).count() == 0
     db.close()
     if is_empty:
-        _seed_from_repos()
+        reseed(clear_existing=False)
 
 
-def _seed_from_repos(on_progress=None):
-    """Scan SEED_REPOS concurrently, import every SKILL.md/.yaml/.yml found."""
-    # Step 1: scan all repos in parallel
-    all_files = []
+def _fetch_all_files() -> list[tuple[str, str]]:
+    """Concurrently scan repos and fetch raw file contents. Returns [(url, raw_text)]."""
+    # Phase 1: scan repos in parallel → collect all installable file URLs
+    all_file_urls = []
     with ThreadPoolExecutor(max_workers=8) as ex:
         futures = {ex.submit(scan_github_repo, url): url for url in SEED_REPOS}
         for fut in as_completed(futures):
-            repo_url = futures[fut]
             try:
                 files = fut.result()
-                installable = [
-                    f for f in files
+                all_file_urls.extend(
+                    f["raw_url"] for f in files
                     if f["path"].lower().endswith(("skill.md", ".yaml", ".yml"))
-                ]
-                all_files.extend(installable)
-                if on_progress:
-                    on_progress("scan", repo_url, len(all_files))
+                )
             except Exception:
                 pass
 
-    # Step 2: import all files in parallel
-    imported = 0
-    with ThreadPoolExecutor(max_workers=12) as ex:
-        futures = {ex.submit(import_url, f["raw_url"]): f for f in all_files}
+    # Phase 2: fetch all file contents in parallel
+    results = []
+    with ThreadPoolExecutor(max_workers=16) as ex:
+        futures = {ex.submit(_fetch, url): url for url in all_file_urls}
         for fut in as_completed(futures):
+            url = futures[fut]
             try:
-                fut.result()
-                imported += 1
+                results.append((url, fut.result()))
             except Exception:
                 pass
-            if on_progress:
-                on_progress("import", futures[fut]["path"], imported)
 
-    return imported
+    return results
 
 
 def reseed(clear_existing: bool = True, on_progress=None) -> int:
-    """Admin: wipe all skills and re-import from SEED_REPOS. Returns count imported."""
+    """Admin: wipe all skills and re-import from SEED_REPOS. Returns count imported.
+
+    on_progress(done, total) is called from the MAIN thread after each DB write,
+    so it is safe to call Streamlit UI functions inside it.
+    """
     if clear_existing:
         db = Session()
         db.query(Skill).delete()
         db.commit()
         db.close()
-    return _seed_from_repos(on_progress=on_progress)
+
+    # All network I/O done concurrently here (no UI calls)
+    fetched = _fetch_all_files()
+    total = len(fetched)
+
+    # DB writes + progress updates happen serially in the caller's thread
+    imported = 0
+    for i, (url, raw) in enumerate(fetched):
+        try:
+            data = _parse(raw)
+            data["source_url"]     = url
+            data["last_synced_at"] = datetime.now(timezone.utc)
+            data["raw_content"]    = raw
+            db = Session()
+            existing = db.query(Skill).filter(Skill.slug == data["slug"]).first()
+            if existing:
+                for k, v in data.items():
+                    if k not in ("id", "created_at", "call_count"):
+                        setattr(existing, k, v)
+            else:
+                db.add(Skill(**{k: v for k, v in data.items() if hasattr(Skill, k)}))
+            db.commit()
+            db.close()
+            imported += 1
+        except Exception:
+            pass
+        if on_progress:
+            on_progress(i + 1, total)
+
+    return imported
 
 
 def _run_migrations():

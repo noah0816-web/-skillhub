@@ -481,22 +481,13 @@ def admin_dialog():
     if st.button("🔄 清空并重新导入", type="primary", use_container_width=True):
         status_text = st.empty()
         progress_bar = st.progress(0)
-        total_repos = len(__import__('db').SEED_REPOS)
-        state = {"scanned": 0, "imported": 0, "total_files": 0}
 
-        def on_progress(phase, name, count):
-            if phase == "scan":
-                state["scanned"] += 1
-                state["total_files"] = count
-                pct = int(state["scanned"] / total_repos * 40)
-                progress_bar.progress(pct)
-                status_text.caption(f"🔍 扫描仓库 {state['scanned']}/{total_repos}，找到 {count} 个文件…")
-            else:
-                state["imported"] = count
-                total = max(state["total_files"], 1)
-                pct = 40 + int(count / total * 60)
-                progress_bar.progress(min(pct, 99))
-                status_text.caption(f"⬇ 导入中 {count}/{state['total_files']}…")
+        status_text.caption("🔍 并发扫描仓库并拉取文件，请稍候…")
+
+        def on_progress(done, total):
+            pct = int(done / max(total, 1) * 100)
+            progress_bar.progress(min(pct, 99))
+            status_text.caption(f"⬇ 写入数据库 {done}/{total}…")
 
         try:
             n = reseed(clear_existing=True, on_progress=on_progress)
