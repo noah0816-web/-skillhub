@@ -1,9 +1,11 @@
 import json
+import re
 import yaml
+import httpx
 import streamlit as st
 from db import (
     init_db, get_all_skills, get_categories,
-    get_skill, execute_skill, preview_url, import_url, sync_skill,
+    get_skill, preview_url, import_url, sync_skill,
     scan_github_repo,
 )
 
@@ -93,6 +95,27 @@ CAT_CLASS = {
 }
 
 def cat_class(c): return CAT_CLASS.get(c, "cat-default")
+
+
+@st.cache_data(ttl=3600)
+def fetch_github_stars(source_url: str) -> int | None:
+    if not source_url:
+        return None
+    m = re.match(r"https?://github\.com/([^/]+)/([^/]+?)(?:\.git|/.*)?$", source_url)
+    if not m:
+        return None
+    owner, repo = m.groups()
+    try:
+        r = httpx.get(
+            f"https://api.github.com/repos/{owner}/{repo}",
+            timeout=5,
+            headers={"Accept": "application/vnd.github.v3+json"},
+        )
+        if r.status_code == 200:
+            return r.json().get("stargazers_count")
+    except Exception:
+        pass
+    return None
 
 
 # ── Import dialog ─────────────────────────────────────────────────────────────
@@ -293,42 +316,118 @@ def show_detail(slug: str):
         st.query_params.clear()
         return
 
-    # Back + header
     st.markdown(f'<div class="back-btn"><a href="/">← 返回广场</a></div>', unsafe_allow_html=True)
     st.write("")
 
-    # Title row
-    t1, t2 = st.columns([5, 2])
-    with t1:
-        st.markdown(f"## {skill['icon']} {skill['name']}")
-        _cc = cat_class(skill["category"])
-        _cn = skill["category"]
-        st.markdown(f'<span class="card-cat {_cc}">{_cn}</span>', unsafe_allow_html=True)
-        st.caption(skill["summary"])
-    with t2:
-        st.metric("调用次数", f"{skill['call_count']:,}")
-        st.caption(f"👤 {skill['owner']}  ·  {skill['output_type'].upper()}")
+    # ── Header ──────────────────────────────────────────────────────────────────
+    _cc = cat_class(skill["category"])
+    stars = fetch_github_stars(skill.get("source_url") or "")
+    star_str = f"  ·  ⭐ {stars:,}" if stars is not None else ""
+
+    st.markdown(f'<span class="card-cat {_cc}">{skill["category"]}</span>', unsafe_allow_html=True)
+    st.markdown(f"## {skill['icon']} {skill['name']}")
+    st.markdown(
+        f'<p style="color:#94a3b8;font-size:1rem;margin:-.5rem 0 .5rem">{skill["summary"]}</p>',
+        unsafe_allow_html=True,
+    )
+    st.caption(f"👤 {skill['owner']}  ·  {skill['output_type'].upper()}  ·  {skill['call_count']:,} 次下载{star_str}")
+
+    st.divider()
+
+    # ── Main layout: description (left) | get & use (right) ─────────────────────
+    left, right = st.columns([3, 2], gap="large")
+
+    with left:
+        st.markdown("#### 技能说明")
+        st.markdown(skill["description"])
+
+        schema = skill.get("input_schema") or []
+        if schema:
+            st.divider()
+            st.markdown("#### 输入参数")
+            for field in schema:
+                req_badge = " `必填`" if field.get("required") else ""
+                ftype = field.get("type", "text")
+                parts = [f"类型：`{ftype}`"]
+                if field.get("placeholder"):
+                    parts.append(f"示例：`{field['placeholder']}`")
+                if field.get("options"):
+                    parts.append("选项：" + " / ".join(f"`{o}`" for o in field["options"]))
+                if field.get("default") not in (None, ""):
+                    parts.append(f"默认：`{field['default']}`")
+                st.markdown(f"**{field['label']}**{req_badge}　　{'　　'.join(parts)}")
+
+    with right:
+        st.markdown("#### 获取与使用")
+
+        # Download data
         _dl_keys = ["name", "slug", "icon", "category", "summary", "description",
                     "owner", "input_schema", "output_type", "execute_url", "source_url"]
         _dl_data = {k: skill[k] for k in _dl_keys if skill.get(k) not in (None, "", [])}
-        st.download_button(
-            "⬇ 下载 Skill YAML",
-            data=yaml.dump(_dl_data, allow_unicode=True, sort_keys=False),
-            file_name=f"{skill['slug']}.yaml",
-            mime="text/yaml",
-            use_container_width=True,
+
+        # SKILL.md content (Claude Code format)
+        schema_section = ""
+        if skill.get("input_schema"):
+            rows = "\n".join(
+                f"| {f['label']} | `{f.get('type','text')}` | {'是' if f.get('required') else '否'} | {f.get('placeholder', '')} |"
+                for f in skill["input_schema"]
+            )
+            schema_section = f"\n\n## 输入参数\n\n| 参数 | 类型 | 必填 | 示例 |\n|------|------|------|------|\n{rows}"
+
+        skill_md = (
+            f"---\nname: {skill['name']}\ndescription: {skill['summary']}\n"
+            f"category: {skill['category']}\nowner: {skill['owner']}\n"
+            f"output_type: {skill['output_type']}\n---\n\n"
+            f"{skill['description']}{schema_section}"
         )
 
-    # Source row for external skills
-    if skill.get("source_url"):
-        sc1, sc2 = st.columns([5, 1])
-        with sc1:
-            url_display = skill["source_url"].replace("https://","").replace("http://","")
-            st.markdown(f'🔗 <a href="{skill["source_url"]}" target="_blank" style="font-size:.8rem;color:#a5b4fc;font-family:monospace">{url_display}</a>', unsafe_allow_html=True)
+        col_a, col_b = st.columns(2)
+        with col_a:
+            st.download_button(
+                "⬇ YAML",
+                data=yaml.dump(_dl_data, allow_unicode=True, sort_keys=False),
+                file_name=f"{skill['slug']}.yaml",
+                mime="text/yaml",
+                use_container_width=True,
+            )
+        with col_b:
+            st.download_button(
+                "⬇ SKILL.md",
+                data=skill_md,
+                file_name=f"{skill['slug']}.md",
+                mime="text/markdown",
+                use_container_width=True,
+            )
+
+        st.markdown("""
+<div style="background:#161b27;border:1px solid #1e2535;border-radius:12px;padding:1.1rem 1.25rem;margin-top:.75rem">
+<p style="color:#64748b;font-size:.75rem;margin:0 0 .9rem;font-weight:600;letter-spacing:.07em;text-transform:uppercase">在 Claude Code 中使用</p>
+""", unsafe_allow_html=True)
+
+        st.markdown("**Step 1** — 下载 `SKILL.md` 文件")
+        st.markdown("**Step 2** — 安装到 Skills 目录")
+        st.code(f"mv ~/Downloads/{skill['slug']}.md ~/.claude/skills/{skill['slug']}.md", language="bash")
+        st.markdown("**Step 3** — 在 Claude Code 中调用")
+        st.code(f"/{skill['slug']}", language="bash")
+        st.markdown("</div>", unsafe_allow_html=True)
+
+        # ── Source ──────────────────────────────────────────────────────────────
+        if skill.get("source_url"):
+            st.divider()
+            st.markdown("#### 来源")
+            url_display = skill["source_url"].replace("https://", "").replace("http://", "")
+            st.markdown(
+                f'🔗 <a href="{skill["source_url"]}" target="_blank" '
+                f'style="font-size:.85rem;color:#a5b4fc;font-family:monospace">{url_display}</a>',
+                unsafe_allow_html=True,
+            )
+            if stars is not None:
+                st.markdown(
+                    f'<span style="font-size:.85rem;color:#fbbf24">⭐ {stars:,} stars on GitHub</span>',
+                    unsafe_allow_html=True,
+                )
             if skill.get("last_synced_at"):
-                synced = str(skill["last_synced_at"])[:16]
-                st.caption(f"上次同步：{synced}")
-        with sc2:
+                st.caption(f"上次同步：{str(skill['last_synced_at'])[:16]}")
             if st.button("🔄 同步更新", use_container_width=True):
                 with st.spinner("同步中…"):
                     try:
@@ -338,71 +437,6 @@ def show_detail(slug: str):
                     except Exception as e:
                         st.error(str(e))
 
-    st.divider()
-
-    # Two-column layout: form | output
-    left, right = st.columns([1, 1], gap="large")
-
-    with left:
-        st.markdown("**技能说明**")
-        st.markdown(skill["description"])
-
-        st.divider()
-        st.markdown("**输入参数**")
-
-        schema = skill.get("input_schema") or []
-        payload = {}
-
-        with st.form("exec_form"):
-            for field in schema:
-                key   = field["key"]
-                label = field["label"] + (" *" if field.get("required") else "")
-                ph    = field.get("placeholder", "")
-                ftype = field.get("type", "text")
-
-                if ftype == "textarea":
-                    payload[key] = st.text_area(label, placeholder=ph, height=120)
-                elif ftype == "select":
-                    opts = field.get("options", [])
-                    default_val = field.get("default", opts[0] if opts else "")
-                    idx = opts.index(default_val) if default_val in opts else 0
-                    payload[key] = st.selectbox(label, opts, index=idx)
-                elif ftype == "number":
-                    payload[key] = st.text_input(label, value=str(field.get("default", "")), placeholder=ph)
-                else:
-                    payload[key] = st.text_input(label, placeholder=ph)
-
-            submitted = st.form_submit_button("▶  执行 Skill", type="primary", use_container_width=True)
-
-    with right:
-        st.markdown("**执行结果**")
-
-        if submitted:
-            clean = {k: v for k, v in payload.items() if v}
-            with st.spinner("Agent 执行中…"):
-                try:
-                    out_type, result = execute_skill(slug, clean)
-                    st.session_state[f"result_{slug}"] = (out_type, result)
-                except Exception as e:
-                    st.session_state[f"result_{slug}"] = ("error", str(e))
-            st.rerun()
-
-        if f"result_{slug}" in st.session_state:
-            out_type, result = st.session_state[f"result_{slug}"]
-            if out_type == "error":
-                st.error(result)
-            elif out_type == "json":
-                try:
-                    st.json(json.loads(result))
-                except Exception:
-                    st.code(result, language="json")
-            else:
-                st.markdown(result)
-
-            if st.button("复制结果", use_container_width=True):
-                st.code(result)
-        else:
-            st.markdown('<div class="output-box"><p style="color:#475569;text-align:center;padding-top:4rem">填写参数后点击执行</p></div>', unsafe_allow_html=True)
 
 
 # ── Router ────────────────────────────────────────────────────────────────────
