@@ -1,4 +1,5 @@
 import json
+import yaml
 import streamlit as st
 from db import (
     init_db, get_all_skills, get_categories,
@@ -307,6 +308,16 @@ def show_detail(slug: str):
     with t2:
         st.metric("调用次数", f"{skill['call_count']:,}")
         st.caption(f"👤 {skill['owner']}  ·  {skill['output_type'].upper()}")
+        _dl_keys = ["name", "slug", "icon", "category", "summary", "description",
+                    "owner", "input_schema", "output_type", "execute_url", "source_url"]
+        _dl_data = {k: skill[k] for k in _dl_keys if skill.get(k) not in (None, "", [])}
+        st.download_button(
+            "⬇ 下载 Skill YAML",
+            data=yaml.dump(_dl_data, allow_unicode=True, sort_keys=False),
+            file_name=f"{skill['slug']}.yaml",
+            mime="text/yaml",
+            use_container_width=True,
+        )
 
     # Source row for external skills
     if skill.get("source_url"):

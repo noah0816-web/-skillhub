@@ -259,6 +259,7 @@ function buildForm(schema) {
       input = document.createElement('textarea');
       input.rows = 5;
       input.className = `${base} p-3 resize-y min-h-[100px]`;
+      if (field.placeholder) input.placeholder = field.placeholder;
     } else if (field.type === 'select') {
       input = document.createElement('select');
       input.className = `${base} px-3 py-2.5`;
