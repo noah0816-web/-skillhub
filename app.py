@@ -213,8 +213,8 @@ def show_grid():
     # Header
     h1, h2 = st.columns([6, 1])
     with h1:
-        st.markdown("# ⚡ SkillHub · AI 技能广场")
-        st.caption("集中展示与调用团队内部所有 AI Agent 技能。支持从 GitHub / 任意公网 URL 一键引入外部 Skill。")
+        st.markdown("# 硬件工程 skillhub")
+        st.caption("集中展示团队外部精选的通用skills。支持从Github&任意公共网站一键引入外部Skill")
     with h2:
         st.write("")
         if st.button("＋ 导入 Skill", type="primary", use_container_width=True):
