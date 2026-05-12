@@ -130,10 +130,13 @@ def cat_class(c): return CAT_CLASS.get(c, "cat-default")
 def fetch_github_stars(source_url: str) -> int | None:
     if not source_url:
         return None
-    m = re.match(r"https?://github\.com/([^/]+)/([^/]+?)(?:\.git|/.*)?$", source_url)
+    # Support both github.com and raw.githubusercontent.com URLs
+    m = re.match(r"https://raw\.githubusercontent\.com/([^/]+)/([^/]+)/", source_url)
+    if not m:
+        m = re.match(r"https?://github\.com/([^/]+)/([^/]+?)(?:\.git|/.*)?$", source_url)
     if not m:
         return None
-    owner, repo = m.groups()
+    owner, repo = m.group(1), m.group(2)
     try:
         r = httpx.get(
             f"https://api.github.com/repos/{owner}/{repo}",
@@ -470,9 +473,19 @@ def _show_detail_inner(slug: str):
         if skill.get("source_url"):
             st.divider()
             st.markdown("#### 来源")
-            url_display = skill["source_url"].replace("https://", "").replace("http://", "")
+            raw = skill["source_url"]
+            # Convert raw.githubusercontent.com URL → github.com/blob URL for display
+            m = re.match(
+                r"https://raw\.githubusercontent\.com/([^/]+)/([^/]+)/([^/]+)/(.*)",
+                raw,
+            )
+            github_url = (
+                f"https://github.com/{m.group(1)}/{m.group(2)}/blob/{m.group(3)}/{m.group(4)}"
+                if m else raw
+            )
+            url_display = github_url.replace("https://", "")
             st.markdown(
-                f'🔗 <a href="{skill["source_url"]}" target="_blank" '
+                f'🔗 <a href="{github_url}" target="_blank" '
                 f'style="font-size:.85rem;color:#a5b4fc;font-family:monospace">{url_display}</a>',
                 unsafe_allow_html=True,
             )
