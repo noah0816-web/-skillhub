@@ -476,15 +476,36 @@ def admin_dialog():
     st.divider()
 
     st.markdown("**重新 Seed**　清空现有数据，从所有仓库重新导入")
-    st.caption(f"共 {len(__import__('db').SEED_REPOS)} 个仓库，预计 2-5 分钟")
+    st.caption(f"共 {len(__import__('db').SEED_REPOS)} 个仓库，并发扫描，约 30-60 秒")
+
     if st.button("🔄 清空并重新导入", type="primary", use_container_width=True):
-        with st.spinner("正在扫描并导入，请稍候…"):
-            try:
-                n = reseed(clear_existing=True)
-                st.success(f"完成！共导入 {n} 个 Skill")
-                st.rerun()
-            except Exception as e:
-                st.error(f"失败：{e}")
+        status_text = st.empty()
+        progress_bar = st.progress(0)
+        total_repos = len(__import__('db').SEED_REPOS)
+        state = {"scanned": 0, "imported": 0, "total_files": 0}
+
+        def on_progress(phase, name, count):
+            if phase == "scan":
+                state["scanned"] += 1
+                state["total_files"] = count
+                pct = int(state["scanned"] / total_repos * 40)
+                progress_bar.progress(pct)
+                status_text.caption(f"🔍 扫描仓库 {state['scanned']}/{total_repos}，找到 {count} 个文件…")
+            else:
+                state["imported"] = count
+                total = max(state["total_files"], 1)
+                pct = 40 + int(count / total * 60)
+                progress_bar.progress(min(pct, 99))
+                status_text.caption(f"⬇ 导入中 {count}/{state['total_files']}…")
+
+        try:
+            n = reseed(clear_existing=True, on_progress=on_progress)
+            progress_bar.progress(100)
+            status_text.empty()
+            st.success(f"✅ 完成！共导入 {n} 个 Skill")
+            st.rerun()
+        except Exception as e:
+            st.error(f"失败：{e}")
 
 
 # ── Router ────────────────────────────────────────────────────────────────────

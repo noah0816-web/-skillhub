@@ -1,6 +1,7 @@
 import json
 import os
 import re
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 
 import httpx
@@ -92,35 +93,50 @@ def init_db():
         _seed_from_repos()
 
 
-def _seed_from_repos():
-    """Scan SEED_REPOS, import every SKILL.md / .yaml / .yml found. Skip on any error."""
-    for repo_url in SEED_REPOS:
-        try:
-            files = scan_github_repo(repo_url)
-        except Exception:
-            continue
-        installable = [
-            f for f in files
-            if f["path"].lower().endswith(("skill.md", ".yaml", ".yml"))
-        ]
-        for f in installable:
+def _seed_from_repos(on_progress=None):
+    """Scan SEED_REPOS concurrently, import every SKILL.md/.yaml/.yml found."""
+    # Step 1: scan all repos in parallel
+    all_files = []
+    with ThreadPoolExecutor(max_workers=8) as ex:
+        futures = {ex.submit(scan_github_repo, url): url for url in SEED_REPOS}
+        for fut in as_completed(futures):
+            repo_url = futures[fut]
             try:
-                import_url(f["raw_url"])
+                files = fut.result()
+                installable = [
+                    f for f in files
+                    if f["path"].lower().endswith(("skill.md", ".yaml", ".yml"))
+                ]
+                all_files.extend(installable)
+                if on_progress:
+                    on_progress("scan", repo_url, len(all_files))
             except Exception:
-                continue
+                pass
+
+    # Step 2: import all files in parallel
+    imported = 0
+    with ThreadPoolExecutor(max_workers=12) as ex:
+        futures = {ex.submit(import_url, f["raw_url"]): f for f in all_files}
+        for fut in as_completed(futures):
+            try:
+                fut.result()
+                imported += 1
+            except Exception:
+                pass
+            if on_progress:
+                on_progress("import", futures[fut]["path"], imported)
+
+    return imported
 
 
-def reseed(clear_existing: bool = True) -> int:
+def reseed(clear_existing: bool = True, on_progress=None) -> int:
     """Admin: wipe all skills and re-import from SEED_REPOS. Returns count imported."""
     if clear_existing:
         db = Session()
         db.query(Skill).delete()
         db.commit()
         db.close()
-    before = Session().query(Skill).count()
-    _seed_from_repos()
-    after = Session().query(Skill).count()
-    return after - before
+    return _seed_from_repos(on_progress=on_progress)
 
 
 def _run_migrations():
