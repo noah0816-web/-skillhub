@@ -348,6 +348,15 @@ def show_grid():
 # ── Detail view ───────────────────────────────────────────────────────────────
 
 def show_detail(slug: str):
+    try:
+        _show_detail_inner(slug)
+    except Exception as e:
+        st.error(f"渲染出错：{e}")
+        import traceback
+        st.code(traceback.format_exc(), language="text")
+
+
+def _show_detail_inner(slug: str):
     skill = get_skill(slug)
     if not skill:
         st.error("Skill 不存在")
@@ -390,10 +399,14 @@ def show_detail(slug: str):
         st.markdown(skill["description"])
 
         schema = skill.get("input_schema") or []
+        if isinstance(schema, str):
+            schema = []
         if schema:
             st.divider()
             st.markdown("#### 输入参数")
             for field in schema:
+                if not isinstance(field, dict):
+                    continue
                 req_badge = " `必填`" if field.get("required") else ""
                 ftype = field.get("type", "text")
                 parts = [f"类型：`{ftype}`"]
@@ -403,7 +416,7 @@ def show_detail(slug: str):
                     parts.append("选项：" + " / ".join(f"`{o}`" for o in field["options"]))
                 if field.get("default") not in (None, ""):
                     parts.append(f"默认：`{field['default']}`")
-                st.markdown(f"**{field['label']}**{req_badge}　　{'　　'.join(parts)}")
+                st.markdown(f"**{field.get('label','参数')}**{req_badge}　　{'　　'.join(parts)}")
 
     with right:
         st.markdown("#### 获取与使用")
