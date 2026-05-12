@@ -53,6 +53,7 @@ def _row_to_dict(s: Skill) -> dict:
 # ── DB init ───────────────────────────────────────────────────────────────────
 
 SEED_REPOS = [
+    # ── 英文仓库 ────────────────────────────────────────────────────────────────
     "https://github.com/anthropics/skills",
     "https://github.com/openai/skills",
     "https://github.com/thedotmack/claude-mem",
@@ -65,6 +66,19 @@ SEED_REPOS = [
     "https://github.com/Lum1104/Understand-Anything",
     "https://github.com/teng-lin/notebooklm-py",
     "https://github.com/Orchestra-Research/AI-Research-SKILLs",
+    # ── 中文仓库 ────────────────────────────────────────────────────────────────
+    "https://github.com/sunjixin2023/patent-writing",       # 专利写作
+    "https://github.com/liyupi/yupi-skill",                 # 编程教育/职业建议
+    "https://github.com/KeWang0622/kaogong-skill",          # 公考备考
+    "https://github.com/vivy-yi/xiaohongshu-skills",        # 小红书运营 (172 skills)
+    "https://github.com/ma2ong/claude-skills-collection",   # 写作/内容创作
+    "https://github.com/youyouhe/bidsmart-claude-skills",   # 政府采购招投标
+    "https://github.com/laolaoshiren/claude-code-skills-zh",# 中文开发者合集
+    "https://github.com/TulanCN/vibe-noveling",             # 网文写作
+    "https://github.com/wwwzhouhui/skills_collection",      # 内容生成/自动化
+    "https://github.com/huanglei288766/claude-code-zh",     # Spring Boot/Vue3/小程序
+    "https://github.com/wangjs-jacky/jacky-skills",         # 开发工具/Obsidian (47 skills)
+    "https://github.com/Y1fe1-Yang/resume-assistant-skill", # 中文求职简历
 ]
 
 
