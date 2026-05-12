@@ -11,8 +11,16 @@ from sqlalchemy.orm import declarative_base, sessionmaker
 
 # ── Database setup ────────────────────────────────────────────────────────────
 
-DB_PATH = os.environ.get("DB_PATH", "skillhub.db")
-engine = create_engine(f"sqlite:///{DB_PATH}", connect_args={"check_same_thread": False})
+DATABASE_URL = os.environ.get("DATABASE_URL")
+
+if DATABASE_URL:
+    # PostgreSQL (Supabase / Render) — Supabase gives postgres:// prefix, SQLAlchemy needs postgresql://
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+    engine = create_engine(DATABASE_URL, pool_pre_ping=True, pool_size=5, max_overflow=10)
+else:
+    # Fallback: local SQLite for development
+    DB_PATH = os.environ.get("DB_PATH", "skillhub.db")
+    engine = create_engine(f"sqlite:///{DB_PATH}", connect_args={"check_same_thread": False})
 Session = sessionmaker(bind=engine)
 Base = declarative_base()
 
@@ -167,20 +175,40 @@ def reseed(clear_existing: bool = True, on_progress=None) -> int:
 
 
 def _run_migrations():
-    new_cols = [
-        ("source_url",     "TEXT"),
-        ("execute_url",    "TEXT"),
-        ("last_synced_at", "DATETIME"),
-        ("raw_content",    "TEXT"),
-    ]
     with engine.connect() as conn:
-        existing = {r[1] for r in conn.execute(text("PRAGMA table_info(skills)"))}
+        is_pg = engine.dialect.name == "postgresql"
+        if is_pg:
+            # PostgreSQL: use information_schema to check existing columns
+            existing = {
+                r[0] for r in conn.execute(text(
+                    "SELECT column_name FROM information_schema.columns "
+                    "WHERE table_name = 'skills'"
+                ))
+            }
+            new_cols = [
+                ("source_url",     "TEXT"),
+                ("execute_url",    "TEXT"),
+                ("last_synced_at", "TIMESTAMPTZ"),
+                ("raw_content",    "TEXT"),
+            ]
+        else:
+            # SQLite
+            existing = {r[1] for r in conn.execute(text("PRAGMA table_info(skills)"))}
+            new_cols = [
+                ("source_url",     "TEXT"),
+                ("execute_url",    "TEXT"),
+                ("last_synced_at", "DATETIME"),
+                ("raw_content",    "TEXT"),
+            ]
+
         for col, typ in new_cols:
             if col not in existing:
                 conn.execute(text(f"ALTER TABLE skills ADD COLUMN {col} {typ}"))
-        # Remove description-only entries that have no real installable file
+
+        # Remove description-only entries (no real file)
         conn.execute(text(
-            "DELETE FROM skills WHERE source_url IS NOT NULL AND (raw_content IS NULL OR raw_content = '')"
+            "DELETE FROM skills WHERE source_url IS NOT NULL "
+            "AND (raw_content IS NULL OR raw_content = '')"
         ))
         conn.commit()
 
